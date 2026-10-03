@@ -1,0 +1,24 @@
+# Design work (mockups, briefs) stays local
+designs/
+/DESIGN.md
+
+# Gradle / Android build output
+.gradle/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+
+# IDE
+.idea/
+*.iml
+.kotlin/
+
+# Signing keys and their passwords
+*.jks
+*.keystore
+keystore.properties
+
+# macOS
+.DS_Store
