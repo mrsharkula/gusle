@@ -6,6 +6,9 @@ designs/
 # Gradle / Android build output
 .gradle/
 build/
+/app/release/
+*.apk
+*.aab
 captures/
 .externalNativeBuild/
 .cxx/

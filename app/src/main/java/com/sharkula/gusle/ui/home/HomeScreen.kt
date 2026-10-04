@@ -53,6 +53,7 @@ fun HomeScreen(
     val listState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
     val colors = MaterialTheme.colorScheme
+    val laterColors = ButtonDefaults.filledTonalButtonColors()
 
     ScreenScaffold(
         scrollState = listState,
@@ -72,7 +73,7 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
                     transformation = SurfaceTransformation(transformationSpec),
                 ) {
-                    Text(stringResource(R.string.app_name))
+                    Text(stringResource(R.string.home_title))
                 }
             }
             item {
@@ -97,13 +98,13 @@ fun HomeScreen(
                     enabled = false,
                     modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
                     transformation = SurfaceTransformation(transformationSpec),
-                    colors = ButtonDefaults.filledTonalButtonColors(),
+                    colors = laterColors,
                     icon = {
-                        // Disabled: the container fades like the button's own; the icon keeps
-                        // the button's disabled content color.
+                        // Disabled: the circle uses the button's own disabled container color;
+                        // the icon keeps its disabled content color.
                         IconCircle(
                             icon = source.icon,
-                            background = colors.onSurface.copy(alpha = 0.12f),
+                            background = laterColors.disabledContainerColor,
                         )
                     },
                     label = { Text(stringResource(source.label)) },
@@ -113,7 +114,10 @@ fun HomeScreen(
     }
 }
 
-/** Leading 32dp circle holding an 18dp icon, the row anatomy from DESIGN.md. */
+/**
+ * Leading 32dp circle holding an 18dp icon. Song rows show their cover in the same 32dp
+ * circle, so every list row in the app lines up the same way.
+ */
 @Composable
 private fun IconCircle(
     @DrawableRes icon: Int,

@@ -30,8 +30,11 @@ android {
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
-                // Relative paths are relative to keystore.properties, i.e. the project root.
-                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                // "~/" means the home folder; other relative paths are relative to
+                // keystore.properties, i.e. the project root.
+                val storePath = keystoreProperties.getProperty("storeFile")
+                    .replaceFirst(Regex("^~(?=/|$)"), System.getProperty("user.home"))
+                storeFile = rootProject.file(storePath)
                 storePassword = keystoreProperties.getProperty("storePassword")
                 keyAlias = keystoreProperties.getProperty("keyAlias")
                 keyPassword = keystoreProperties.getProperty("keyPassword")
@@ -60,6 +63,19 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+}
+
+// An unsigned release would install as a different app, so refuse it at the very start of
+// the release build instead of quietly producing one. Debug builds don't need the key.
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    doFirst {
+        if (!hasReleaseSigning) {
+            throw GradleException(
+                "keystore.properties is missing or incomplete: release builds need " +
+                    signingKeys.joinToString()
+            )
+        }
     }
 }
 
