@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.wear.compose.material3.AppScaffold
-import com.sharkula.gusle.ui.home.HomeScreen
+import com.sharkula.gusle.ui.GusleNavHost
 import com.sharkula.gusle.ui.theme.GusleTheme
 
 class MainActivity : ComponentActivity() {
@@ -13,7 +13,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             GusleTheme {
                 AppScaffold {
-                    HomeScreen(onAllSongs = {}, onSettings = {})
+                    GusleNavHost()
                 }
             }
         }
