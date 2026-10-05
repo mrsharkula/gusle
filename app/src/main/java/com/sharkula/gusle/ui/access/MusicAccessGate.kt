@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.LocalActivity
@@ -22,6 +21,7 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.sharkula.gusle.R
 import com.sharkula.gusle.data.MusicPermission
+import com.sharkula.gusle.data.hasMusicAccess
 import com.sharkula.gusle.ui.components.MessageScreen
 import com.sharkula.gusle.ui.theme.GusleTheme
 
@@ -83,7 +83,7 @@ private const val RefusedOnce = "refused_once"
 
 private fun Activity.musicAccess(): MusicAccess {
     val prefs = getSharedPreferences(AccessPrefs, Context.MODE_PRIVATE)
-    if (checkSelfPermission(MusicPermission) == PackageManager.PERMISSION_GRANTED) {
+    if (hasMusicAccess()) {
         // However it was turned on: if it's ever taken away again (Android does that to apps
         // left unused for months), the prompt works again too.
         prefs.edit().remove(RefusedOnce).apply()

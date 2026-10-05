@@ -16,6 +16,9 @@
     <string name="no_songs_title">No songs yet</string>
     <string name="no_songs_text">Send music to your watch with Wear Files.</string>
     <string name="rescan">Rescan</string>
+    <string name="scanning">Scanning</string>
+    <string name="read_failed_title">Can\'t read your songs</string>
+    <string name="read_failed_text">Something went wrong on the watch. Rescan to try again.</string>
     <plurals name="song_count">
         <item quantity="one">%d song</item>
         <item quantity="other">%d songs</item>
