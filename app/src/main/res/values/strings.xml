@@ -13,4 +13,11 @@
     <string name="access_off_title">Music access is off</string>
     <string name="access_off_text">Without it Gusle can\'t see your songs. Turn it on in the watch\'s settings.</string>
     <string name="open_settings">Open settings</string>
+    <string name="no_songs_title">No songs yet</string>
+    <string name="no_songs_text">Send music to your watch with Wear Files.</string>
+    <string name="rescan">Rescan</string>
+    <plurals name="song_count">
+        <item quantity="one">%d song</item>
+        <item quantity="other">%d songs</item>
+    </plurals>
 </resources>

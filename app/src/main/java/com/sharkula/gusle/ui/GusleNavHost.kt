@@ -6,6 +6,7 @@ import androidx.compose.runtime.remember
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import androidx.wear.compose.navigation3.rememberSwipeDismissableSceneStrategy
+import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.ui.home.HomeScreen
 import com.sharkula.gusle.ui.songs.AllSongsScreen
 
@@ -20,9 +21,12 @@ private fun MutableList<Screen>.open(screen: Screen) {
     if (lastOrNull() != screen) add(screen)
 }
 
-/** App navigation. Swiping right (or the back button) returns to the previous screen. */
+/**
+ * App navigation over the [songs] on the watch. Swiping right (or the back button) returns to
+ * the previous screen.
+ */
 @Composable
-fun GusleNavHost() {
+fun GusleNavHost(songs: List<Song>) {
     val backStack = remember { mutableStateListOf<Screen>(Screen.Home) }
 
     NavDisplay(
@@ -32,6 +36,7 @@ fun GusleNavHost() {
         entryProvider = entryProvider {
             entry<Screen.Home> {
                 HomeScreen(
+                    songCount = songs.size,
                     onAllSongs = { backStack.open(Screen.AllSongs) },
                     onSettings = {},
                 )

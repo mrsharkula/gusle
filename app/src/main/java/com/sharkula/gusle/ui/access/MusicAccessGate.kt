@@ -1,6 +1,5 @@
 package com.sharkula.gusle.ui.access
 
-import android.Manifest
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -22,10 +21,9 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.sharkula.gusle.R
+import com.sharkula.gusle.data.MusicPermission
 import com.sharkula.gusle.ui.components.MessageScreen
 import com.sharkula.gusle.ui.theme.GusleTheme
-
-private const val MusicPermission = Manifest.permission.READ_MEDIA_AUDIO
 
 private enum class MusicAccess {
     Granted,

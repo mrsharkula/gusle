@@ -91,6 +91,7 @@ dependencies {
     implementation(libs.wear.tooling.preview)
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.kotlinx.coroutines.android)
     implementation(libs.profileinstaller)
     debugImplementation(libs.compose.ui.tooling)
 }

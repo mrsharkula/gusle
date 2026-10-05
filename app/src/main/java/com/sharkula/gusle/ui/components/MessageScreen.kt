@@ -1,8 +1,10 @@
 package com.sharkula.gusle.ui.components
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,8 +27,8 @@ import androidx.wear.compose.material3.lazy.transformedHeight
 
 /**
  * A screen that says what's wrong and offers the fix: an [icon] in a circle, a short [title],
- * one line of [text], and the [action] in the edge button at the bottom. It scrolls when a
- * large font doesn't fit.
+ * one line of [text], and the [action] in the edge button at the bottom, after its optional
+ * [actionIcon]. It scrolls when a large font doesn't fit.
  */
 @Composable
 fun MessageScreen(
@@ -37,6 +39,7 @@ fun MessageScreen(
     onAction: () -> Unit,
     iconBackground: Color = MaterialTheme.colorScheme.secondaryContainer,
     iconTint: Color = MaterialTheme.colorScheme.onSecondaryContainer,
+    actionIcon: (@Composable () -> Unit)? = null,
 ) {
     val listState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
@@ -45,6 +48,10 @@ fun MessageScreen(
         scrollState = listState,
         edgeButton = {
             EdgeButton(onClick = onAction, buttonSize = EdgeButtonSize.Small) {
+                if (actionIcon != null) {
+                    actionIcon()
+                    Spacer(Modifier.width(6.dp))
+                }
                 // Smaller than the default label, so "Open settings" fits on one line at the
                 // default font size. Larger fonts wrap it onto two lines, which still fit.
                 Text(action, style = MaterialTheme.typography.labelSmall)

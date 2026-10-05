@@ -5,6 +5,7 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.wear.compose.foundation.lazy.items
@@ -34,6 +35,7 @@ private val laterSources = listOf(
 
 @Composable
 fun HomeScreen(
+    songCount: Int,
     onAllSongs: () -> Unit,
     onSettings: () -> Unit,
 ) {
@@ -66,6 +68,7 @@ fun HomeScreen(
                     )
                 },
                 label = { Text(stringResource(R.string.all_songs)) },
+                secondaryLabel = { Text(pluralStringResource(R.plurals.song_count, songCount, songCount)) },
             )
         }
         items(laterSources, key = { it.label }) { source ->
@@ -93,6 +96,6 @@ fun HomeScreen(
 @Composable
 private fun HomeScreenPreview() {
     GusleTheme {
-        HomeScreen(onAllSongs = {}, onSettings = {})
+        HomeScreen(songCount = 51, onAllSongs = {}, onSettings = {})
     }
 }
