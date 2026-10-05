@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.wear.compose.material3.AppScaffold
 import com.sharkula.gusle.ui.GusleNavHost
+import com.sharkula.gusle.ui.access.MusicAccessGate
 import com.sharkula.gusle.ui.theme.GusleTheme
 
 class MainActivity : ComponentActivity() {
@@ -13,7 +14,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             GusleTheme {
                 AppScaffold {
-                    GusleNavHost()
+                    MusicAccessGate {
+                        GusleNavHost()
+                    }
                 }
             }
         }

@@ -90,6 +90,7 @@ dependencies {
     implementation(libs.navigation3.ui)
     implementation(libs.wear.tooling.preview)
     implementation(libs.activity.compose)
+    implementation(libs.lifecycle.runtime.compose)
     implementation(libs.profileinstaller)
     debugImplementation(libs.compose.ui.tooling)
 }
