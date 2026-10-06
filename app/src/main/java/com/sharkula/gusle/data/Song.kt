@@ -11,5 +11,8 @@ data class Song(
     val title: String,
     /** Null when the song has no artist tag. */
     val artist: String?,
+    /** 0 when MediaStore doesn't know it. */
     val durationMs: Long,
+    /** When the file last changed, in seconds: its cover is re-read after that. */
+    val fileModified: Long,
 )

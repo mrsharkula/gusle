@@ -92,6 +92,7 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.coil.compose)
     implementation(libs.profileinstaller)
     debugImplementation(libs.compose.ui.tooling)
 }

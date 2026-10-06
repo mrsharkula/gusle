@@ -16,18 +16,23 @@ import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.LocalContentColor
 
 /**
- * An icon in a filled circle. List rows lead with the default 32dp circle holding an 18dp icon;
- * song rows show their cover in the same 32dp circle, so every list row in the app lines up
- * the same way.
+ * List rows lead with a circle this size: an icon in it, or a song's cover, so every list row
+ * in the app lines up the same way.
  */
+val RowCircleSize = 32.dp
+
+/** The icon in a list row's circle. */
+val RowCircleIconSize = 18.dp
+
+/** An icon in a filled circle; list-row size unless [size] says otherwise. */
 @Composable
 fun IconCircle(
     @DrawableRes icon: Int,
     background: Color,
     modifier: Modifier = Modifier,
     tint: Color = LocalContentColor.current,
-    size: Dp = 32.dp,
-    iconSize: Dp = 18.dp,
+    size: Dp = RowCircleSize,
+    iconSize: Dp = RowCircleIconSize,
 ) {
     Box(
         modifier = modifier.size(size).background(background, CircleShape),

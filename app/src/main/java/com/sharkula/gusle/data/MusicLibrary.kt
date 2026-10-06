@@ -96,6 +96,7 @@ class MusicLibrary(context: Context) {
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DISPLAY_NAME,
+            MediaStore.Audio.Media.DATE_MODIFIED,
         )
         val songs: List<Song> = try {
             // IS_MUSIC leaves out ringtones, notification sounds, alarms and recordings.
@@ -107,6 +108,7 @@ class MusicLibrary(context: Context) {
                 val artist = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
                 val duration = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 val fileName = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+                val modified = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
                 buildList<Song>(cursor.count) {
                     while (cursor.moveToNext()) {
                         val songId = cursor.getLong(id)
@@ -122,6 +124,7 @@ class MusicLibrary(context: Context) {
                                 artist = cursor.getString(artist)
                                     ?.takeIf { it.isNotBlank() && it != MediaStore.UNKNOWN_STRING },
                                 durationMs = cursor.getLong(duration),
+                                fileModified = cursor.getLong(modified),
                             ),
                         )
                     }

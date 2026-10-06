@@ -2,24 +2,20 @@ package com.sharkula.gusle.ui.home
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.wear.compose.foundation.lazy.items
-import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.EdgeButtonSize
 import androidx.wear.compose.material3.MaterialTheme
-import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
-import androidx.wear.compose.material3.lazy.transformedHeight
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.sharkula.gusle.R
 import com.sharkula.gusle.ui.components.IconCircle
+import com.sharkula.gusle.ui.components.ListButton
 import com.sharkula.gusle.ui.components.ListScreen
 import com.sharkula.gusle.ui.theme.GusleTheme
 
@@ -55,10 +51,9 @@ fun HomeScreen(
         },
     ) { transformationSpec ->
         item {
-            Button(
+            ListButton(
                 onClick = onAllSongs,
-                modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
-                transformation = SurfaceTransformation(transformationSpec),
+                transformationSpec = transformationSpec,
                 colors = ButtonDefaults.filledVariantButtonColors(),
                 icon = {
                     IconCircle(
@@ -72,11 +67,10 @@ fun HomeScreen(
             )
         }
         items(laterSources, key = { it.label }) { source ->
-            Button(
+            ListButton(
                 onClick = {},
+                transformationSpec = transformationSpec,
                 enabled = false,
-                modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
-                transformation = SurfaceTransformation(transformationSpec),
                 colors = laterColors,
                 icon = {
                     // Disabled: the circle uses the button's own disabled container color;

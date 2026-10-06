@@ -42,7 +42,8 @@ fun GusleNavHost(songs: List<Song>) {
                 )
             }
             entry<Screen.AllSongs> {
-                AllSongsScreen()
+                // Both start playing once playback exists.
+                AllSongsScreen(songs, onShuffleAll = {}, onSong = {})
             }
         },
     )
