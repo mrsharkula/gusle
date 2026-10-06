@@ -90,9 +90,12 @@ dependencies {
     implementation(libs.navigation3.ui)
     implementation(libs.wear.tooling.preview)
     implementation(libs.activity.compose)
+    implementation(libs.core.ktx)
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.coil.compose)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.session)
     implementation(libs.profileinstaller)
     debugImplementation(libs.compose.ui.tooling)
 }

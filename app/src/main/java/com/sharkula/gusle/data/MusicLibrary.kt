@@ -35,12 +35,15 @@ sealed interface Songs {
     data object Failed : Songs
 
     /** Every song, A–Z by title. */
-    data class Loaded(val list: List<Song>) : Songs
+    data class Loaded(val list: List<Song>) : Songs {
+        /** The same songs by [Song.id], built the first time it's needed. */
+        val byId: Map<Long, Song> by lazy { list.associateBy { it.id } }
+    }
 }
 
 /**
  * The songs on the watch, read from MediaStore in one query and kept in memory. The app keeps
- * one library for the screens and, later, the playback service. Use it from the main thread.
+ * one library for the screens and the playback service. Use it from the main thread.
  */
 class MusicLibrary(context: Context) {
     private val context = context.applicationContext
@@ -57,15 +60,16 @@ class MusicLibrary(context: Context) {
 
     /**
      * Reads the songs again, e.g. whenever Gusle comes back to the screen. Asked during a read,
-     * it reads once more afterwards, so nothing that changed in the meantime is missed.
+     * it reads once more afterwards, so nothing that changed in the meantime is missed. Returns
+     * the read, which ends once [songs] holds its result.
      */
     @MainThread
-    fun refresh() {
-        if (read?.isActive == true) {
+    fun refresh(): Job {
+        read?.takeIf { it.isActive }?.let { ongoing ->
             readAgain = true
-            return
+            return ongoing
         }
-        read = scope.launch {
+        return scope.launch {
             _scanning.value = true
             try {
                 do {
@@ -82,7 +86,7 @@ class MusicLibrary(context: Context) {
             } finally {
                 _scanning.value = false
             }
-        }
+        }.also { read = it }
     }
 
     /** Null when MediaStore couldn't be read. */

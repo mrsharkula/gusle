@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.core.content.edit
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.tooling.preview.devices.WearDevices
@@ -86,11 +87,11 @@ private fun Activity.musicAccess(): MusicAccess {
     if (hasMusicAccess()) {
         // However it was turned on: if it's ever taken away again (Android does that to apps
         // left unused for months), the prompt works again too.
-        prefs.edit().remove(RefusedOnce).apply()
+        prefs.edit { remove(RefusedOnce) }
         return MusicAccess.Granted
     }
     if (shouldShowRequestPermissionRationale(MusicPermission)) {
-        prefs.edit().putBoolean(RefusedOnce, true).apply()
+        prefs.edit { putBoolean(RefusedOnce, true) }
         return MusicAccess.CanAsk
     }
     // Not refused before: never asked, or the prompt was swiped away without an answer.

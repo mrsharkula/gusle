@@ -26,7 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.foundation.lazy.items
+import androidx.wear.compose.foundation.lazy.itemsIndexed
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
@@ -47,7 +47,8 @@ import com.sharkula.gusle.ui.theme.GusleTheme
 fun AllSongsScreen(
     songs: List<Song>,
     onShuffleAll: () -> Unit,
-    onSong: (Song) -> Unit,
+    /** Gets the tapped song's position in [songs]. */
+    onSong: (index: Int) -> Unit,
 ) {
     val noCover = rememberNoCoverPainter()
 
@@ -70,9 +71,9 @@ fun AllSongsScreen(
                 },
             )
         }
-        items(songs, key = { it.id }, contentType = { "song" }) { song ->
+        itemsIndexed(songs, key = { _, song -> song.id }, contentType = { _, _ -> "song" }) { index, song ->
             ListButton(
-                onClick = { onSong(song) },
+                onClick = { onSong(index) },
                 transformationSpec = transformationSpec,
                 colors = ButtonDefaults.filledTonalButtonColors(),
                 icon = {

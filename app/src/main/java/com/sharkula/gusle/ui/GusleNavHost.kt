@@ -8,6 +8,9 @@ import androidx.navigation3.ui.NavDisplay
 import androidx.wear.compose.navigation3.rememberSwipeDismissableSceneStrategy
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.ui.home.HomeScreen
+import com.sharkula.gusle.ui.playback.playFrom
+import com.sharkula.gusle.ui.playback.rememberPlayerConnection
+import com.sharkula.gusle.ui.playback.shuffleAll
 import com.sharkula.gusle.ui.songs.AllSongsScreen
 
 /** The app's screens. Arguments a screen needs later become properties of its key. */
@@ -28,6 +31,7 @@ private fun MutableList<Screen>.open(screen: Screen) {
 @Composable
 fun GusleNavHost(songs: List<Song>) {
     val backStack = remember { mutableStateListOf<Screen>(Screen.Home) }
+    val player = rememberPlayerConnection()
 
     NavDisplay(
         backStack = backStack,
@@ -42,8 +46,11 @@ fun GusleNavHost(songs: List<Song>) {
                 )
             }
             entry<Screen.AllSongs> {
-                // Both start playing once playback exists.
-                AllSongsScreen(songs, onShuffleAll = {}, onSong = {})
+                AllSongsScreen(
+                    songs,
+                    onShuffleAll = { player.withPlayer { shuffleAll(songs) } },
+                    onSong = { index -> player.withPlayer { playFrom(songs, index) } },
+                )
             }
         },
     )

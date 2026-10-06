@@ -12,7 +12,7 @@ import com.sharkula.gusle.ui.theme.GusleTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val library = (application as GusleApp).library
+        val library = musicLibrary
         setContent {
             GusleTheme {
                 AppScaffold {

@@ -1,6 +1,7 @@
 package com.sharkula.gusle
 
 import android.app.Application
+import android.content.Context
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -9,7 +10,7 @@ import com.sharkula.gusle.ui.covers.SongCoverFetcher
 import com.sharkula.gusle.ui.covers.SongCoverKeyer
 
 class GusleApp : Application(), SingletonImageLoader.Factory {
-    /** The songs on the watch, shared by the screens and, later, the playback service. */
+    /** The songs on the watch, shared by the screens and the playback service. */
     val library by lazy { MusicLibrary(this) }
 
     /** Coil's image loader, taught to load covers from song files. */
@@ -21,3 +22,6 @@ class GusleApp : Application(), SingletonImageLoader.Factory {
             }
             .build()
 }
+
+/** The app's one [MusicLibrary], from any of its contexts. */
+val Context.musicLibrary: MusicLibrary get() = (applicationContext as GusleApp).library
