@@ -25,7 +25,6 @@ import androidx.wear.compose.material3.Icon
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.sharkula.gusle.R
 import com.sharkula.gusle.data.MusicLibrary
-import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.ui.components.MessageScreen
 import com.sharkula.gusle.ui.theme.GusleTheme
@@ -37,7 +36,7 @@ import kotlinx.coroutines.launch
  * once access is on.
  */
 @Composable
-fun SongsGate(library: MusicLibrary, content: @Composable (songs: List<Song>) -> Unit) {
+fun SongsGate(library: MusicLibrary, content: @Composable (songs: Songs.Loaded) -> Unit) {
     // Read whenever Gusle comes back to the screen, so music sent or deleted meanwhile shows up.
     LifecycleResumeEffect(library) {
         library.refresh()
@@ -54,7 +53,7 @@ fun SongsGate(library: MusicLibrary, content: @Composable (songs: List<Song>) ->
             if (state.list.isEmpty()) {
                 RescanScreen(R.string.no_songs_title, R.string.no_songs_text, library)
             } else {
-                content(state.list)
+                content(state)
             }
     }
 }

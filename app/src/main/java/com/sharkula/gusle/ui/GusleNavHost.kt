@@ -3,11 +3,13 @@ package com.sharkula.gusle.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.media3.common.Player
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import androidx.wear.compose.navigation3.rememberSwipeDismissableSceneStrategy
-import com.sharkula.gusle.data.Song
+import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.ui.home.HomeScreen
+import com.sharkula.gusle.ui.nowplaying.NowPlayingScreen
 import com.sharkula.gusle.ui.playback.playFrom
 import com.sharkula.gusle.ui.playback.rememberPlayerConnection
 import com.sharkula.gusle.ui.playback.shuffleAll
@@ -17,6 +19,7 @@ import com.sharkula.gusle.ui.songs.AllSongsScreen
 sealed interface Screen {
     data object Home : Screen
     data object AllSongs : Screen
+    data object NowPlaying : Screen
 }
 
 /** Opens [screen] unless it's already on top, so a double tap can't stack it twice. */
@@ -29,9 +32,15 @@ private fun MutableList<Screen>.open(screen: Screen) {
  * the previous screen.
  */
 @Composable
-fun GusleNavHost(songs: List<Song>) {
+fun GusleNavHost(songs: Songs.Loaded) {
     val backStack = remember { mutableStateListOf<Screen>(Screen.Home) }
     val player = rememberPlayerConnection()
+
+    /** Starts playing (connecting first if needed), and opens Now playing on it. */
+    fun play(action: Player.() -> Unit) {
+        player.withPlayer(action)
+        backStack.open(Screen.NowPlaying)
+    }
 
     NavDisplay(
         backStack = backStack,
@@ -40,17 +49,20 @@ fun GusleNavHost(songs: List<Song>) {
         entryProvider = entryProvider {
             entry<Screen.Home> {
                 HomeScreen(
-                    songCount = songs.size,
+                    songCount = songs.list.size,
                     onAllSongs = { backStack.open(Screen.AllSongs) },
                     onSettings = {},
                 )
             }
             entry<Screen.AllSongs> {
                 AllSongsScreen(
-                    songs,
-                    onShuffleAll = { player.withPlayer { shuffleAll(songs) } },
-                    onSong = { index -> player.withPlayer { playFrom(songs, index) } },
+                    songs.list,
+                    onShuffleAll = { play { shuffleAll(songs.list) } },
+                    onSong = { index -> play { playFrom(songs.list, index) } },
                 )
+            }
+            entry<Screen.NowPlaying> {
+                NowPlayingScreen(player, songs.byId)
             }
         },
     )

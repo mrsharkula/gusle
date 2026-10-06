@@ -20,6 +20,11 @@
     <string name="scanning">Scanning</string>
     <string name="read_failed_title">Can\'t read your songs</string>
     <string name="read_failed_text">Something went wrong on the watch. Rescan to try again.</string>
+    <string name="previous_song">Previous song</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="next_song">Next song</string>
+    <string name="nothing_playing">Nothing playing</string>
     <plurals name="song_count">
         <item quantity="one">%d song</item>
         <item quantity="other">%d songs</item>

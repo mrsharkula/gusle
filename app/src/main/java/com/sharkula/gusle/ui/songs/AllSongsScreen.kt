@@ -13,11 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -39,6 +35,7 @@ import com.sharkula.gusle.ui.components.ListButton
 import com.sharkula.gusle.ui.components.ListScreen
 import com.sharkula.gusle.ui.components.RowCircleIconSize
 import com.sharkula.gusle.ui.components.RowCircleSize
+import com.sharkula.gusle.ui.covers.NoCoverPainter
 import com.sharkula.gusle.ui.covers.SongCover
 import com.sharkula.gusle.ui.theme.GusleTheme
 
@@ -105,26 +102,7 @@ private fun rememberNoCoverPainter(): Painter {
     val note = painterResource(R.drawable.ic_music_note)
     val colors = MaterialTheme.colorScheme
     return remember(note, colors) {
-        NoCoverPainter(note, colors.secondaryContainer, colors.onSecondaryContainer)
-    }
-}
-
-/** Fills its bounds (the image clips them to a circle) and centers the note in them. */
-private class NoCoverPainter(
-    private val note: Painter,
-    private val background: Color,
-    noteColor: Color,
-) : Painter() {
-    private val noteTint = ColorFilter.tint(noteColor)
-
-    override val intrinsicSize get() = Size.Unspecified
-
-    override fun DrawScope.onDraw() {
-        drawRect(background)
-        val noteSize = RowCircleIconSize.toPx()
-        translate((size.width - noteSize) / 2, (size.height - noteSize) / 2) {
-            with(note) { draw(Size(noteSize, noteSize), colorFilter = noteTint) }
-        }
+        NoCoverPainter(note, SolidColor(colors.secondaryContainer), colors.onSecondaryContainer, RowCircleIconSize)
     }
 }
 

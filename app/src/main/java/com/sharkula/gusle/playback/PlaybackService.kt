@@ -157,7 +157,7 @@ private class SongLookup(
         return result
     }
 
-    private fun Map<Long, Song>.lookUp(item: MediaItem) = item.mediaId.toLongOrNull()?.let(::get)
+    private fun Map<Long, Song>.lookUp(item: MediaItem) = item.songId?.let(::get)
 
     /**
      * The items that play the songs asked for; songs no longer on the watch are left out. If none

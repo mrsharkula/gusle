@@ -7,6 +7,9 @@ import com.sharkula.gusle.data.Song
 /** The ID the player knows a song by. */
 val Song.mediaId: String get() = id.toString()
 
+/** The [Song.id] of the song this item plays, or null if it isn't one of Gusle's songs. */
+val MediaItem.songId: Long? get() = mediaId.toLongOrNull()
+
 /**
  * What the screens send the player to play this song: only its ID. The playback service looks
  * the song up and plays its [toMediaItem] instead, so playable items are built in one place.

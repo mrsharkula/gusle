@@ -96,6 +96,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
+    implementation(libs.media3.ui.compose)
     implementation(libs.profileinstaller)
     debugImplementation(libs.compose.ui.tooling)
 }

@@ -2,8 +2,13 @@ package com.sharkula.gusle.ui.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LifecycleStartEffect
@@ -19,30 +24,41 @@ import java.util.concurrent.ExecutionException
 
 private const val Tag = "Player"
 
+/** After connecting fails, a screen that shows the player tries again this much later. */
+private const val RetryDelayMs = 1000L
+
 /**
  * Gusle's playback service as the screens use it. It connects on the first tap rather than at
- * launch, so just browsing never starts the player, and runs the tap once connected. It lets
- * go when Gusle leaves the screen, and connects again on the next tap after that, or after the
- * connection failed or was lost.
+ * launch, so just browsing never starts the player, and runs the tap once connected. A screen that
+ * shows the player keeps it connected while it's on (see [rememberShownPlayer]). It lets go when
+ * Gusle leaves the screen, and connects again the next time it's needed.
  */
 class PlayerConnection(private val context: Context) {
     private var connecting: ListenableFuture<MediaController>? = null
-    private var connected: MediaController? = null
+    private val connected = mutableStateOf<MediaController?>(null)
+    private var screensShowing = 0
+    private val handler = Handler(Looper.getMainLooper())
+    private val retry = Runnable { if (screensShowing > 0) connection() }
+
+    /** The player once connected; null until then and after letting go. */
+    val player: State<Player?> get() = connected
+
+    /** Whether [player] is the one connected now, rather than one let go of. Compose observes it. */
+    fun isConnected(player: Player): Boolean = connected.value === player
 
     /** Runs [action] with the player, connecting first if needed. */
     fun withPlayer(action: Player.() -> Unit) {
-        val future = connecting ?: connect().also { connecting = it }
+        val future = connection()
         // The future completes on the main thread, so this runs right then, or right away if it
         // already has. When Gusle left the screen first, the future is cancelled and the tap
-        // goes with it.
+        // goes with it; when connecting failed, the tap is dropped too.
         future.addListener(
             {
                 if (!future.isCancelled) {
                     try {
                         future.get().action()
                     } catch (e: ExecutionException) {
-                        Log.w(Tag, "Couldn't connect to the playback service", e)
-                        if (connecting === future) connecting = null
+                        // Logged where the connection is made.
                     }
                 }
             },
@@ -50,28 +66,65 @@ class PlayerConnection(private val context: Context) {
         )
     }
 
+    /**
+     * Keeps connected for a screen that shows the player, until [stopShowing]: connects now, again
+     * right away when the connection is lost, and again a moment later when connecting fails.
+     */
+    fun startShowing() {
+        screensShowing++
+        connection()
+    }
+
+    fun stopShowing() {
+        screensShowing--
+        if (screensShowing == 0) handler.removeCallbacks(retry)
+    }
+
     /** Lets go of the player, e.g. when Gusle leaves the screen. */
     fun release() {
+        handler.removeCallbacks(retry)
         val future = connecting ?: return
         connecting = null
-        connected = null
+        // Cleared first: letting go calls onDisconnected too, which mustn't take it for a lost
+        // connection.
+        connected.value = null
         MediaController.releaseFuture(future)
     }
 
-    private fun connect(): ListenableFuture<MediaController> {
+    private fun connection(): ListenableFuture<MediaController> =
+        connecting ?: connectNow().also { connecting = it }
+
+    private fun connectNow(): ListenableFuture<MediaController> {
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val future = MediaController.Builder(context, token)
             .setListener(
                 object : MediaController.Listener {
-                    // E.g. the system stopped the service: the next tap connects again.
+                    // E.g. the system stopped the service.
                     override fun onDisconnected(controller: MediaController) {
-                        if (controller === connected) release()
+                        if (controller === connected.value) {
+                            release()
+                            // Otherwise the next tap connects again.
+                            if (screensShowing > 0) connection()
+                        }
                     }
                 },
             )
             .buildAsync()
         future.addListener(
-            { if (!future.isCancelled) connected = runCatching { future.get() }.getOrNull() },
+            {
+                if (!future.isCancelled) {
+                    try {
+                        connected.value = future.get()
+                    } catch (e: ExecutionException) {
+                        Log.w(Tag, "Couldn't connect to the playback service", e)
+                        if (connecting === future) {
+                            connecting = null
+                            // Otherwise the next tap tries again.
+                            if (screensShowing > 0) handler.postDelayed(retry, RetryDelayMs)
+                        }
+                    }
+                }
+            },
             MoreExecutors.directExecutor(),
         )
         return future
@@ -87,6 +140,30 @@ fun rememberPlayerConnection(): PlayerConnection {
         onStopOrDispose { connection.release() }
     }
     return connection
+}
+
+/**
+ * The player, for a screen that shows it, which keeps it connected while the screen is on. Null
+ * until it first connects. When Gusle comes back to the screen, it takes a moment to connect again;
+ * meanwhile this is the one let go of, so the screen goes on showing what it showed rather than
+ * flashing black. That one no longer changes or takes commands, so send them through
+ * [PlayerConnection.withPlayer], which waits for the connection, and check
+ * [PlayerConnection.isConnected] before reading anything anew.
+ */
+@Composable
+fun PlayerConnection.rememberShownPlayer(): Player? {
+    LifecycleStartEffect(this) {
+        startShowing()
+        onStopOrDispose { stopShowing() }
+    }
+    val connected = player.value
+    val last = remember(this) { LastShown() }
+    SideEffect { if (connected != null) last.player = connected }
+    return connected ?: last.player
+}
+
+private class LastShown {
+    var player: Player? = null
 }
 
 /**
