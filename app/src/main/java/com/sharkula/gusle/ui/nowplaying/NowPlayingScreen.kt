@@ -6,52 +6,77 @@ import android.graphics.Shader
 import android.net.Uri
 import androidx.annotation.DrawableRes
 import androidx.annotation.OptIn
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.center
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow as TextShadow
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.VectorGroup
 import androidx.compose.ui.graphics.vector.VectorPath
 import androidx.compose.ui.graphics.vector.toPath
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -71,9 +96,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.applyCanvas
 import androidx.core.graphics.createBitmap
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
@@ -82,6 +104,9 @@ import androidx.media3.ui.compose.state.rememberCurrentMediaItemState
 import androidx.media3.ui.compose.state.rememberNextButtonState
 import androidx.media3.ui.compose.state.rememberPlayPauseButtonState
 import androidx.media3.ui.compose.state.rememberPreviousButtonState
+import androidx.media3.ui.compose.state.rememberShuffleButtonState
+import androidx.wear.compose.foundation.LocalReduceMotion
+import androidx.wear.compose.foundation.requestFocusOnHierarchyActive
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.FilledIconButton
 import androidx.wear.compose.material3.Icon
@@ -91,24 +116,25 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 import androidx.wear.tooling.preview.devices.WearDevices
-import coil3.annotation.ExperimentalCoilApi
-import coil3.asImage
-import coil3.compose.AsyncImage
-import coil3.compose.AsyncImagePreviewHandler
-import coil3.compose.LocalAsyncImagePreviewHandler
-import coil3.compose.LocalPlatformContext
-import coil3.compose.useExistingImageAsPlaceholder
-import coil3.request.ImageRequest
 import com.sharkula.gusle.R
+import com.sharkula.gusle.coverColors
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.playback.songId
+import com.sharkula.gusle.ui.covers.CoverArt
 import com.sharkula.gusle.ui.covers.NoCoverPainter
 import com.sharkula.gusle.ui.covers.SongCover
+import com.sharkula.gusle.ui.covers.coverColorScheme
 import com.sharkula.gusle.ui.playback.PlayerConnection
 import com.sharkula.gusle.ui.playback.rememberShownPlayer
+import com.sharkula.gusle.ui.theme.DefaultColorScheme
 import com.sharkula.gusle.ui.theme.GusleTheme
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 
 /**
  * The player: the playing song's cover in the middle, fading into black, its title, the controls
@@ -134,7 +160,11 @@ private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: 
     val playPause = rememberPlayPauseButtonState(player)
     val previous = rememberPreviousButtonState(player)
     val next = rememberNextButtonState(player)
-    val progress = rememberProgress(connection, player)
+    val shuffle = rememberShuffleButtonState(player)
+    val shown = rememberScreenShown()
+    val animationsOff = rememberAnimationsOff()
+    val progress = rememberProgress(connection, player, shown)
+    val volume = rememberMusicVolume()
 
     val mediaItem = item.mediaItem
     // Right after a tap, the player knows only the song's ID until the playback service has looked
@@ -145,6 +175,16 @@ private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: 
     // screen, that's the one let go of, and a tap then waits for the new one.
     fun command(enabled: Boolean, action: Player.() -> Unit): (() -> Unit)? =
         if (enabled) ({ connection.withPlayer(action) }) else null
+
+    // The song's cover and its colors go up together once both are ready; until then the last
+    // ones stay. Opened again on the song shown last, they're up in the first frame.
+    val cover = song?.let(::SongCover)
+    val coverColors = LocalContext.current.coverColors
+    val coverSizePx = coverSizePx()
+    val art by produceState(coverColors.lastArt?.takeIf { it.cover == cover }, cover, coverSizePx) {
+        value = coverColors.art(cover, coverSizePx)
+    }
+
     NowPlaying(
         // Nothing to play, e.g. when Gusle left the screen before a tap reached the player, and the
         // playback service has started afresh since. The controls are disabled then too.
@@ -154,9 +194,12 @@ private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: 
             (metadata.title ?: song?.title)?.toString().orEmpty()
         },
         artist = (metadata.artist ?: song?.artist)?.toString(),
-        cover = song?.let(::SongCover),
+        art = art,
         isPlaying = !playPause.showPlay,
         progress = { progress.fraction() },
+        animate = shown.value && !LocalReduceMotion.current && !animationsOff.value,
+        volume = volume,
+        shuffleOn = shuffle.shuffleOn,
         onPrevious = command(previous.isEnabled) { seekToPrevious() },
         onPlayPause = command(playPause.isEnabled) { Util.handlePlayPauseButtonAction(this) },
         onNext = command(next.isEnabled) { seekToNext() },
@@ -167,24 +210,22 @@ private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: 
 private const val ProgressTickMs = 1000L
 
 /**
- * The [player]'s progress, updated once a second while it plays, but only while it's connected,
- * Gusle is on the screen and the screen is on: media3's rememberProgressStateWithTickInterval goes
- * on ticking in the background.
+ * The [player]'s progress, updated once a second while it plays, but only while it's connected
+ * and [shown]: media3's rememberProgressStateWithTickInterval goes on ticking in the background.
  */
 @OptIn(UnstableApi::class)
 @Composable
-private fun rememberProgress(connection: PlayerConnection, player: Player): ProgressStateWithTickInterval {
+private fun rememberProgress(
+    connection: PlayerConnection,
+    player: Player,
+    shown: State<Boolean>,
+): ProgressStateWithTickInterval {
     val scope = rememberCoroutineScope()
     val progress = remember(player) { ProgressStateWithTickInterval(player, ProgressTickMs, scope) }
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val context = LocalContext.current
-    LaunchedEffect(progress, lifecycle, context, connection) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            // A player let go of reads 0 for everything; its connected successor takes over soon.
-            combine(context.screenOn(), snapshotFlow { connection.isConnected(player) }) { on, connected ->
-                on && connected
-            }.collectLatest { live -> if (live) progress.observe() }
-        }
+    LaunchedEffect(progress, connection, shown) {
+        // A player let go of reads 0 for everything; its connected successor takes over soon.
+        snapshotFlow { shown.value && connection.isConnected(player) }
+            .collectLatest { live -> if (live) progress.observe() }
     }
     return progress
 }
@@ -204,16 +245,142 @@ private const val DesignWidth = 233f
 private fun NowPlaying(
     title: String,
     artist: String?,
-    cover: SongCover?,
+    /** The cover and its colors; null until the first is ready, when the middle stays empty. */
+    art: CoverArt?,
     isPlaying: Boolean,
     progress: () -> Float,
+    /**
+     * Whether anything may move frame by frame: only while Gusle is on the screen, the screen is
+     * on and Reduce motion is off. Otherwise everything stands still in its end state.
+     */
+    animate: Boolean,
+    /** Shown along the bottom; the crown changes it. */
+    volume: Volume,
+    /** Shows a small shuffle icon while the songs play in random order. */
+    shuffleOn: Boolean,
     /** Null while there's nothing to go back to, which disables the button; likewise the others. */
     onPrevious: (() -> Unit)?,
     onPlayPause: (() -> Unit)?,
     onNext: (() -> Unit)?,
 ) {
+    val haptics = LocalHapticFeedback.current
+    val crownStepPx = with(LocalDensity.current) { CrownStep.toPx() }
+    val crown = remember(crownStepPx) { CrownSteps(crownStepPx) }
+    GusleTheme(colorScheme = art?.colors ?: DefaultColorScheme) {
+        DesignScale {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    // The crown changes the volume while this screen is shown.
+                    .onRotaryScrollEvent { event ->
+                        crown.turn(event.verticalScrollPixels, event.uptimeMillis) { up ->
+                            if (volume.step(up)) {
+                                haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+                            }
+                        }
+                        true
+                    }
+                    .requestFocusOnHierarchyActive()
+                    // Takes the crown's input without being something to stop at for TalkBack.
+                    .focusTarget(),
+            ) {
+                if (art != null) Cover(art.picture, Modifier.align(Alignment.Center))
+                ProgressRing(progress, isPlaying, animate, Modifier.fillMaxSize())
+                Text(
+                    title,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(start = 40.dp, top = 36.dp, end = 40.dp)
+                        .fillMaxWidth()
+                        // A title that fits stays centered.
+                        .wrapContentWidth()
+                        // One that doesn't scrolls slowly instead of ending in "…".
+                        .then(if (animate) Modifier.slowMarquee() else Modifier),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = designText(17, FontWeight.SemiBold, shadowAlpha = 0.75f),
+                )
+                Controls(
+                    isPlaying,
+                    animate,
+                    onPrevious,
+                    onPlayPause,
+                    onNext,
+                    Modifier.align(Alignment.TopCenter).padding(top = 90.dp),
+                )
+                if (!artist.isNullOrBlank()) {
+                    Text(
+                        artist,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(start = 30.dp, top = 158.dp, end = 30.dp)
+                            .fillMaxWidth(),
+                        color = artistColor(),
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = designText(12, FontWeight.Normal, shadowAlpha = 0.85f),
+                    )
+                }
+                VolumeArc(volume, iconColor = artistColor())
+                if (shuffleOn) {
+                    // Left of the speaker, 8 dp apart; the speaker stays in the middle.
+                    ShuffleIcon(
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 195.dp)
+                            .offset(x = (-21).dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** A small shuffle icon in the artist's color, saying "Shuffle on" to accessibility services. */
+@Composable
+private fun ShuffleIcon(modifier: Modifier) {
+    Icon(
+        painterResource(R.drawable.ic_shuffle),
+        contentDescription = stringResource(R.string.shuffle_on),
+        modifier = modifier.size(13.dp),
+        tint = artistColor(),
+    )
+}
+
+/** Long titles scroll at this speed, pausing this long before each round. */
+private val MarqueeSpeed = 30.dp
+private const val MarqueePauseMs = 1500
+
+private fun Modifier.slowMarquee() = basicMarquee(
+    iterations = Int.MAX_VALUE,
+    initialDelayMillis = MarqueePauseMs,
+    repeatDelayMillis = MarqueePauseMs,
+    velocity = MarqueeSpeed,
+)
+
+/**
+ * Turning the crown as far as would scroll a list by this much changes the volume a notch: on the
+ * watch, about four notches per quarter turn.
+ */
+private val CrownStep = 24.dp
+
+/**
+ * The artist's color, also for the small icons near it: halfway from onSurfaceVariant to
+ * onSurface, like the design, as onSurfaceVariant alone is too dark over a cover.
+ */
+@Composable
+private fun artistColor(): Color {
+    val colors = MaterialTheme.colorScheme
+    return lerp(colors.onSurfaceVariant, colors.onSurface, 0.5f)
+}
+
+/** Scales every dp and sp in [content] with the screen, so they're the design's own numbers. */
+@Composable
+private fun DesignScale(content: @Composable () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        // Scales every dp and sp below with the screen, so they're the design's own numbers.
         val scale = maxWidth.value / DesignWidth
         val screenDensity = LocalDensity.current
         val screenViewConfiguration = LocalViewConfiguration.current
@@ -224,49 +391,8 @@ private fun NowPlaying(
         CompositionLocalProvider(
             LocalDensity provides designDensity,
             LocalViewConfiguration provides designViewConfiguration,
-        ) {
-            Box(Modifier.fillMaxSize()) {
-                Cover(cover, Modifier.align(Alignment.Center))
-                ProgressRing(progress, Modifier.fillMaxSize())
-                Text(
-                    title,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(start = 40.dp, top = 36.dp, end = 40.dp)
-                        .fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = designText(17, FontWeight.SemiBold, shadowAlpha = 0.75f),
-                )
-                Controls(
-                    isPlaying,
-                    onPrevious,
-                    onPlayPause,
-                    onNext,
-                    Modifier.align(Alignment.TopCenter).padding(top = 90.dp),
-                )
-                if (!artist.isNullOrBlank()) {
-                    val colors = MaterialTheme.colorScheme
-                    Text(
-                        artist,
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(start = 30.dp, top = 158.dp, end = 30.dp)
-                            .fillMaxWidth(),
-                        // Halfway to onSurface, like the design: onSurfaceVariant alone is too dark
-                        // over a cover.
-                        color = lerp(colors.onSurfaceVariant, colors.onSurface, 0.5f),
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = designText(12, FontWeight.Normal, shadowAlpha = 0.85f),
-                    )
-                }
-                // The bottom stays empty for the volume arc.
-            }
-        }
+            content = content,
+        )
     }
 }
 
@@ -305,28 +431,25 @@ private fun designText(size: Int, weight: FontWeight, shadowAlpha: Float): TextS
     )
 }
 
-/**
- * The cover in a circle in the middle, or the no-cover note, fading into black toward the edge.
- * Center-cropped, so a 16:9 cover shows its middle.
- */
-@kotlin.OptIn(ExperimentalCoilApi::class)
+/** The cover is drawn this large (dp of the design's [DesignWidth]). */
+private const val CoverDiameter = 161f
+
+/** The cover's size on this screen, in pixels. */
 @Composable
-private fun Cover(cover: SongCover?, modifier: Modifier) {
-    val context = LocalPlatformContext.current
-    val request = remember(cover, context) {
-        ImageRequest.Builder(context)
-            .data(cover)
-            // Shows the last song's cover until this one's is ready, rather than blinking black.
-            .useExistingImageAsPlaceholder(true)
-            .build()
-    }
-    val noCover = rememberNoCoverPainter()
-    AsyncImage(
-        model = request,
+private fun coverSizePx(): Int =
+    (LocalWindowInfo.current.containerSize.width * CoverDiameter / DesignWidth).roundToInt()
+
+/**
+ * The [picture] in a circle in the middle, or the no-cover note when there's none, fading into
+ * black toward the edge. Center-cropped, so a 16:9 cover shows its middle.
+ */
+@Composable
+private fun Cover(picture: ImageBitmap?, modifier: Modifier) {
+    val painter = if (picture != null) remember(picture) { BitmapPainter(picture) } else rememberNoCoverPainter()
+    Image(
+        painter,
         contentDescription = null,
-        modifier = modifier.size(161.dp).fadeIntoBlack(),
-        // Also when there's no cover to load at all.
-        error = noCover,
+        modifier = modifier.size(CoverDiameter.dp).fadeIntoBlack(),
         contentScale = ContentScale.Crop,
     )
 }
@@ -350,12 +473,15 @@ private fun Modifier.fadeIntoBlack() =
 /** The design's darker sand between primaryContainer in the middle and black at the edge. */
 private val NoCoverGlowEdge = Color(0xFF2B2217)
 
-/** A warm glow with a large faint music note. */
+/**
+ * A warm glow with a large faint music note, always in sand: that's a song without a cover's color,
+ * also while the last song's colors are still up.
+ */
 @Composable
 private fun rememberNoCoverPainter(): Painter {
     val note = painterResource(R.drawable.ic_music_note)
-    val colors = MaterialTheme.colorScheme
-    return remember(note, colors) {
+    return remember(note) {
+        val colors = DefaultColorScheme
         val glow = Brush.radialGradient(0f to colors.primaryContainer, 0.7f to NoCoverGlowEdge, 1f to Color.Black)
         NoCoverPainter(note, glow, colors.primary.copy(alpha = 0.22f), noteSize = 104.dp)
     }
@@ -365,44 +491,163 @@ private fun rememberNoCoverPainter(): Painter {
 private const val RingStart = -70f
 private const val RingSweep = 320f
 
-/** The song's progress along the edge, over a faint track, with a gap at the top for the clock. */
+/** While playing, the played part waves this far in and out, 50 times around a full circle. */
+private val WaveHeight = 1.8.dp
+private const val WavesPerTurn = 50
+
+/** The waves travel along the ring at 2 radians a second, so each takes π seconds to move one on. */
+private const val WaveCycleNanos = (PI * 1_000_000_000).toLong()
+
+/** The wave grows when playing starts, and flattens when it pauses, over this long. */
+private const val WaveChangeMs = 300
+
+/**
+ * The song's progress along the edge, over a faint track, with a gap at the top for the clock.
+ * While playing, the played part waves, and the waves travel along it while [animate].
+ */
 @Composable
-private fun ProgressRing(progress: () -> Float, modifier: Modifier) {
+private fun ProgressRing(progress: () -> Float, isPlaying: Boolean, animate: Boolean, modifier: Modifier) {
     val color = MaterialTheme.colorScheme.primary
-    // A layer of its own, so a tick draws just the ring again.
-    Canvas(modifier.graphicsLayer()) {
-        val radius = 112.dp.toPx()
-        val topLeft = center - Offset(radius, radius)
-        val arcSize = Size(radius * 2, radius * 2)
-        val width = 4.dp.toPx()
-        drawArc(RingTrack, RingStart, RingSweep, useCenter = false, topLeft, arcSize, style = Stroke(width))
-        val fraction = progress()
-        if (fraction > 0f) {
-            drawArc(
-                color,
-                RingStart,
-                RingSweep * fraction,
-                useCenter = false,
-                topLeft,
-                arcSize,
-                style = Stroke(width, cap = StrokeCap.Round),
-            )
+    // How wavy, from flat (0) to full height (1), and where the waves are. Both are read only while
+    // drawing, so a frame draws just the ring again.
+    val wave = remember { Animatable(if (isPlaying) 1f else 0f) }
+    val phase = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(isPlaying, animate) {
+        val height = if (isPlaying) 1f else 0f
+        if (!animate) {
+            wave.snapTo(height)
+            return@LaunchedEffect
+        }
+        // Not again when it's already there, e.g. each time the screen comes back on. Undispatched,
+        // so it's running before the loop below looks.
+        if (wave.value != height) {
+            launch(start = CoroutineStart.UNDISPATCHED) { wave.animateTo(height, tween(WaveChangeMs)) }
+        }
+        // The waves travel while playing, and while flattening after a pause, but only once some of
+        // the song is played: until then there's nothing wavy to draw.
+        snapshotFlow { progress() > 0f }.collectLatest { played ->
+            if (!played) return@collectLatest
+            val startPhase = phase.floatValue
+            val startNanos = withFrameNanos { it }
+            while (isPlaying || wave.isRunning) {
+                withFrameNanos { now ->
+                    val cycle = ((now - startNanos) % WaveCycleNanos).toFloat() / WaveCycleNanos
+                    phase.floatValue = (startPhase + cycle * 2 * PI.toFloat()) % (2 * PI.toFloat())
+                }
+            }
         }
     }
+    // A layer of its own, so a tick or a frame draws just the ring again.
+    Spacer(
+        modifier.graphicsLayer().drawWithCache {
+            val center = size.center
+            val radius = 112.dp.toPx()
+            val topLeft = center - Offset(radius, radius)
+            val arcSize = Size(radius * 2, radius * 2)
+            val track = Stroke(4.dp.toPx())
+            val played = Stroke(4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            val waveHeight = WaveHeight.toPx()
+            val path = Path()
+            onDrawBehind {
+                drawArc(RingTrack, RingStart, RingSweep, useCenter = false, topLeft, arcSize, style = track)
+                val sweep = RingSweep * progress()
+                if (sweep > 0f) {
+                    val height = waveHeight * wave.value
+                    if (height == 0f) {
+                        drawArc(color, RingStart, sweep, useCenter = false, topLeft, arcSize, style = played)
+                    } else {
+                        path.setWavyArc(center, radius, sweep, height, phase.floatValue)
+                        drawPath(path, color, style = played)
+                    }
+                }
+            }
+        },
+    )
 }
 
 private val RingTrack = Color.White.copy(alpha = 0.16f)
 
-/** Previous, play/pause and next, centered on the screen; a null action disables its button. */
+/**
+ * Sets this path to the ring's played part: [sweep] degrees clockwise from [RingStart], waving
+ * [height] px in and out of [radius], with the waves moved along by [phase] radians. It's made of
+ * straight steps from [WaveSteps], and allocates nothing, so it can be built every frame.
+ */
+private fun Path.setWavyArc(center: Offset, radius: Float, sweep: Float, height: Float, phase: Float) {
+    rewind()
+    val cosPhase = cos(phase)
+    val sinPhase = sin(phase)
+    val steps = (sweep / WaveSteps.Degrees).toInt().coerceAtMost(WaveSteps.Count)
+    for (i in 0..steps) {
+        // sin(wave − phase), expanded so the table holds everything that doesn't move.
+        val r = radius + height * (WaveSteps.waveSin[i] * cosPhase - WaveSteps.waveCos[i] * sinPhase)
+        val x = center.x + r * WaveSteps.x[i]
+        val y = center.y + r * WaveSteps.y[i]
+        if (i == 0) moveTo(x, y) else lineTo(x, y)
+    }
+    // The exact end, which usually falls between two steps.
+    val rest = sweep - steps * WaveSteps.Degrees
+    if (rest > 0f) {
+        val along = Math.toRadians(sweep.toDouble()).toFloat()
+        val angle = Math.toRadians((RingStart + sweep).toDouble()).toFloat()
+        val r = radius + height * sin(along * WavesPerTurn - phase)
+        lineTo(center.x + r * cos(angle), center.y + r * sin(angle))
+    }
+}
+
+/**
+ * The ring in steps of half a degree: each step's direction from the center ([x], [y] on a circle
+ * of radius 1), and its place in the waves.
+ */
+private object WaveSteps {
+    const val Degrees = 0.5f
+    const val Count = (RingSweep / Degrees).toInt()
+
+    val x = FloatArray(Count + 1)
+    val y = FloatArray(Count + 1)
+    val waveSin = FloatArray(Count + 1)
+    val waveCos = FloatArray(Count + 1)
+
+    init {
+        for (i in 0..Count) {
+            val along = Math.toRadians((i * Degrees).toDouble())
+            val angle = Math.toRadians((RingStart + i * Degrees).toDouble())
+            x[i] = cos(angle).toFloat()
+            y[i] = sin(angle).toFloat()
+            waveSin[i] = sin(along * WavesPerTurn).toFloat()
+            waveCos[i] = cos(along * WavesPerTurn).toFloat()
+        }
+    }
+}
+
+/** Play is a rounded square while playing, and a pill while paused; it morphs between the two. */
+private val PlayingCorner = 18.dp
+private val PausedCorner = 26.dp
+private const val MorphMs = 350
+private val MorphEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+
+/**
+ * Previous, play/pause and next, centered on the screen; a null action disables its button. Play
+ * morphs when it changes while [animate], and jumps otherwise.
+ */
 @Composable
 private fun Controls(
     isPlaying: Boolean,
+    animate: Boolean,
     onPrevious: (() -> Unit)?,
     onPlayPause: (() -> Unit)?,
     onNext: (() -> Unit)?,
     modifier: Modifier,
 ) {
     val skipColors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
+    val corner = remember { Animatable(if (isPlaying) PlayingCorner else PausedCorner, Dp.VectorConverter) }
+    LaunchedEffect(isPlaying, animate) {
+        val target = if (isPlaying) PlayingCorner else PausedCorner
+        // Not again when it's already there, e.g. each time the screen comes back on.
+        if (corner.value == target) return@LaunchedEffect
+        if (animate) corner.animateTo(target, tween(MorphMs, easing = MorphEasing)) else corner.snapTo(target)
+    }
+    // A RoundedCornerShape, so the button still morphs it when pressed, too.
+    val playShape = remember(corner) { RoundedCornerShape(AnimatedCornerSize { corner.value }) }
     // Media controls keep their direction in right-to-left languages too.
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         // The skip buttons are 48 dp wide, the smallest touch target, and 4 dp from Play, which
@@ -425,8 +670,7 @@ private fun Controls(
                 onClick = onPlayPause ?: {},
                 modifier = Modifier.size(66.dp, 52.dp),
                 enabled = onPlayPause != null,
-                // A rounded square while playing, a pill while paused.
-                shapes = IconButtonDefaults.shapes(RoundedCornerShape(if (isPlaying) 18.dp else 26.dp)),
+                shapes = IconButtonDefaults.shapes(playShape),
                 colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
                     contentColor = Color.White,
@@ -448,6 +692,15 @@ private fun Controls(
             }
         }
     }
+}
+
+/**
+ * A corner of [size], read only when the shape's outline is made: a change draws the shape again
+ * without recomposing anything.
+ */
+@Stable
+private class AnimatedCornerSize(private val size: () -> Dp) : CornerSize {
+    override fun toPx(shapeSize: Size, density: Density): Float = with(density) { size().toPx() }
 }
 
 private val SkipShadow = Shadow(radius = 4.dp, offset = DpOffset(0.dp, 1.dp), alpha = 0.85f)
@@ -497,11 +750,21 @@ private fun Path.addGroup(group: VectorGroup, parent: Matrix) {
 @Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true)
 @Composable
 private fun NowPlayingPreview() {
+    // A 16:9 stand-in cover, in the Yamato cover's red, fading to near black.
+    val picture = remember {
+        createBitmap(320, 180).applyCanvas {
+            val gradient = LinearGradient(
+                0f, 0f, 320f, 180f, 0xFF93291C.toInt(), 0xFF101010.toInt(), Shader.TileMode.CLAMP,
+            )
+            drawPaint(Paint().apply { shader = gradient })
+        }.asImageBitmap()
+    }
     NowPlayingPreview(
         title = "River at Dawn",
         artist = "Test Ensemble",
-        cover = SongCover(Uri.EMPTY, 0),
+        art = CoverArt(SongCover(Uri.EMPTY, 0), picture, coverColorScheme(0xFF93291C.toInt())),
         isPlaying = true,
+        shuffleOn = true,
     )
 }
 
@@ -511,30 +774,41 @@ private fun NowPlayingNoCoverPreview() {
     NowPlayingPreview(
         title = "A Very Long Song Title That Runs Past the Edge",
         artist = "Test Trio",
-        cover = null,
+        art = CoverArt(null, null, DefaultColorScheme),
         isPlaying = false,
+        shuffleOn = false,
     )
 }
 
-@kotlin.OptIn(ExperimentalCoilApi::class)
 @Composable
-private fun NowPlayingPreview(title: String, artist: String?, cover: SongCover?, isPlaying: Boolean) {
-    // A 16:9 stand-in cover, in the Yamato cover's red, fading to near black.
-    val previewCover = AsyncImagePreviewHandler {
-        createBitmap(320, 180).applyCanvas {
-            val gradient = LinearGradient(
-                0f, 0f, 320f, 180f, 0xFF93291C.toInt(), 0xFF101010.toInt(), Shader.TileMode.CLAMP,
-            )
-            drawPaint(Paint().apply { shader = gradient })
-        }.asImage()
-    }
+private fun NowPlayingPreview(title: String, artist: String?, art: CoverArt, isPlaying: Boolean, shuffleOn: Boolean) {
     GusleTheme {
-        CompositionLocalProvider(LocalAsyncImagePreviewHandler provides previewCover) {
-            AppScaffold {
-                ScreenScaffold {
-                    NowPlaying(title, artist, cover, isPlaying, progress = { 0.38f }, {}, {}, {})
-                }
+        AppScaffold {
+            ScreenScaffold {
+                NowPlaying(
+                    title,
+                    artist,
+                    art,
+                    isPlaying,
+                    progress = { 0.38f },
+                    animate = false,
+                    volume = PreviewVolume,
+                    shuffleOn = shuffleOn,
+                    onPrevious = {},
+                    onPlayPause = {},
+                    onNext = {},
+                )
             }
         }
     }
+}
+
+private object PreviewVolume : Volume {
+    override val fraction = 0.6f
+    override val notches = 15
+    override val canChange = true
+
+    override fun step(up: Boolean) = true
+
+    override fun set(fraction: Float) {}
 }

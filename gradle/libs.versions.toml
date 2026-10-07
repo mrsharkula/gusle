@@ -12,6 +12,8 @@ coroutines = "1.11.0"
 coil = "3.6.3"
 coreKtx = "1.19.1"
 media3 = "1.11.1"
+materialColorUtilities = "5.0.1"
+junit = "4.13.2"
 
 [libraries]
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
@@ -33,6 +35,8 @@ media3-ui-compose = { group = "androidx.media3", name = "media3-ui-compose", ver
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileInstaller" }
+material-color-utilities = { group = "com.materialkolor", name = "material-color-utilities-android", version.ref = "materialColorUtilities" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

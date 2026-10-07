@@ -25,6 +25,8 @@
     <string name="pause">Pause</string>
     <string name="next_song">Next song</string>
     <string name="nothing_playing">Nothing playing</string>
+    <string name="volume">Volume</string>
+    <string name="shuffle_on">Shuffle on</string>
     <plurals name="song_count">
         <item quantity="one">%d song</item>
         <item quantity="other">%d songs</item>

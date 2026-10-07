@@ -1,0 +1,4 @@
+# Compiled ahead of time on install, like the libraries' own profiles. The cover colors' math
+# runs a few hundred thousand times per new cover; interpreted, the watch takes most of a second.
+HSPLcom/materialkolor/**;->**(**)**
+HSPLcom/sharkula/gusle/ui/covers/**;->**(**)**

@@ -5,8 +5,17 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.PowerManager
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -33,3 +42,33 @@ fun Context.screenOn(): Flow<Boolean> = callbackFlow {
     trySend(getSystemService<PowerManager>()?.isInteractive ?: true)
     awaitClose { unregisterReceiver(receiver) }
 }.conflate().distinctUntilChanged()
+
+/**
+ * Whether Gusle is on the screen and the screen is on: what anything that ticks or moves waits
+ * for, so nothing redraws in the background or in the always-on display.
+ */
+@Composable
+fun rememberScreenShown(): State<Boolean> {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val context = LocalContext.current
+    return produceState(initialValue = false, lifecycle, context) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            try {
+                context.screenOn().collect { value = it }
+            } finally {
+                value = false
+            }
+        }
+    }
+}
+
+/**
+ * Whether Android's animations are off: Remove animations in the accessibility settings, or the
+ * animation scale at 0. Wear's own Reduce motion is a separate setting, LocalReduceMotion.
+ */
+@Composable
+fun rememberAnimationsOff(): State<Boolean> = produceState(initialValue = false) {
+    // Compose's own animations already jump then; this is for the ones Gusle runs frame by frame.
+    snapshotFlow { coroutineContext[MotionDurationScale]?.scaleFactor == 0f }.collect { value = it }
+}
+

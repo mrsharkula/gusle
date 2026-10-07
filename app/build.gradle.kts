@@ -98,5 +98,7 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.media3.ui.compose)
     implementation(libs.profileinstaller)
+    implementation(libs.material.color.utilities)
     debugImplementation(libs.compose.ui.tooling)
+    testImplementation(libs.junit)
 }
