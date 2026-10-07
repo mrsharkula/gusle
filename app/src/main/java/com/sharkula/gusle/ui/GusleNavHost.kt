@@ -45,7 +45,7 @@ fun GusleNavHost(songs: Songs.Loaded) {
     NavDisplay(
         backStack = backStack,
         onBack = { backStack.removeLastOrNull() },
-        sceneStrategy = rememberSwipeDismissableSceneStrategy(),
+        sceneStrategies = listOf(rememberSwipeDismissableSceneStrategy()),
         entryProvider = entryProvider {
             entry<Screen.Home> {
                 HomeScreen(
