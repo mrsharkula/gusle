@@ -28,15 +28,26 @@
             android:name="com.google.android.wearable.standalone"
             android:value="true" />
 
+        <!-- Single-top: Gusle is one activity with its own navigation, so launching it again while
+             it's open (the launcher, waking from the always-on display, the media controls)
+             reaches the one there instead of stacking a second one on top. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:taskAffinity="">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Opens MainActivity on Now playing; the media controls' intent goes here. Not exported,
+             so other apps can't ask for it. -->
+        <activity-alias
+            android:name=".OpenNowPlaying"
+            android:exported="false"
+            android:targetActivity=".MainActivity" />
 
         <!-- Plays the songs, also in the background; the watch's media controls connect to it. -->
         <!-- Exported without a permission on purpose: the session's onConnect only lets in

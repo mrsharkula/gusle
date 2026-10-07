@@ -1,7 +1,6 @@
 package com.sharkula.gusle.playback
 
 import android.app.PendingIntent
-import android.content.Intent
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -17,11 +16,11 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import com.sharkula.gusle.GusleApp
-import com.sharkula.gusle.MainActivity
 import com.sharkula.gusle.data.MusicLibrary
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.musicLibrary
+import com.sharkula.gusle.nowPlayingIntent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -65,14 +64,10 @@ class PlaybackService : MediaSessionService() {
         player.addListener(sharePlaying)
         playing.update(player)
         session = MediaSession.Builder(this, player)
-            // Tapping the watch's media controls opens Gusle, or brings it back if it's open.
+            // Tapping the watch's media controls opens Gusle on Now playing, or brings it back there
+            // if it's open.
             .setSessionActivity(
-                PendingIntent.getActivity(
-                    this,
-                    0,
-                    Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-                    PendingIntent.FLAG_IMMUTABLE,
-                ),
+                PendingIntent.getActivity(this, 0, nowPlayingIntent(), PendingIntent.FLAG_IMMUTABLE),
             )
             .setCallback(SongLookup(musicLibrary, packageName, scope))
             .build()
