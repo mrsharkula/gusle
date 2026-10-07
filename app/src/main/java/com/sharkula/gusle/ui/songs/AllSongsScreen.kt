@@ -7,47 +7,39 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.itemsIndexed
-import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.Icon
-import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import androidx.wear.tooling.preview.devices.WearDevices
-import coil3.compose.AsyncImage
 import com.sharkula.gusle.R
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.ui.components.ListButton
 import com.sharkula.gusle.ui.components.ListScreen
-import com.sharkula.gusle.ui.components.RowCircleIconSize
-import com.sharkula.gusle.ui.components.RowCircleSize
-import com.sharkula.gusle.ui.covers.NoCoverPainter
-import com.sharkula.gusle.ui.covers.SongCover
+import com.sharkula.gusle.ui.covers.rememberRowNoCoverPainter
 import com.sharkula.gusle.ui.theme.GusleTheme
 
-/** Every song on the watch, A–Z, with Shuffle all on top. */
+/** Every song on the watch, A–Z, with Shuffle all on top. The player's song is marked. */
 @Composable
 fun AllSongsScreen(
     songs: List<Song>,
+    /** The player's song, playing or paused; null when there's none. */
+    playing: Song?,
+    isPlaying: Boolean,
     onShuffleAll: () -> Unit,
     /** Gets the tapped song's position in [songs]. */
     onSong: (index: Int) -> Unit,
+    /** The player's song was tapped: it goes on as it is. */
+    onPlayingSong: () -> Unit,
 ) {
-    val noCover = rememberNoCoverPainter()
+    val noCover = rememberRowNoCoverPainter()
 
     ListScreen(title = pluralStringResource(R.plurals.song_count, songs.size, songs.size)) { transformationSpec ->
         item(key = "shuffle all") {
@@ -69,40 +61,19 @@ fun AllSongsScreen(
             )
         }
         itemsIndexed(songs, key = { _, song -> song.id }, contentType = { _, _ -> "song" }) { index, song ->
-            ListButton(
-                onClick = { onSong(index) },
-                transformationSpec = transformationSpec,
-                colors = ButtonDefaults.filledTonalButtonColors(),
-                icon = {
-                    // Center-cropped, so a 16:9 cover shows its middle.
-                    AsyncImage(
-                        model = SongCover(song),
-                        contentDescription = null,
-                        modifier = Modifier.size(RowCircleSize).clip(CircleShape),
-                        placeholder = noCover,
-                        error = noCover,
-                        contentScale = ContentScale.Crop,
-                    )
-                },
-                label = { Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            // Null for every row but the player's song's, so when the player changes, only the
+            // rows it changes for are composed again.
+            val isPlayingHere = if (song.id == playing?.id) isPlaying else null
+            SongRow(
+                song,
                 // Left out rather than "0:00" when MediaStore doesn't know it.
-                secondaryLabel = if (song.durationMs > 0) {
-                    { Text(formatLength(song.durationMs)) }
-                } else {
-                    null
-                },
+                secondaryLabel = if (song.durationMs > 0) formatLength(song.durationMs) else null,
+                isPlaying = isPlayingHere,
+                noCover = noCover,
+                transformationSpec = transformationSpec,
+                onClick = if (isPlayingHere != null) onPlayingSong else ({ onSong(index) }),
             )
         }
-    }
-}
-
-/** The music note in a list row's circle, while a cover loads and for songs without one. */
-@Composable
-private fun rememberNoCoverPainter(): Painter {
-    val note = painterResource(R.drawable.ic_music_note)
-    val colors = MaterialTheme.colorScheme
-    return remember(note, colors) {
-        NoCoverPainter(note, SolidColor(colors.secondaryContainer), colors.onSecondaryContainer, RowCircleIconSize)
     }
 }
 
@@ -136,6 +107,6 @@ private fun AllSongsScreenPreview() {
         Song(3, Uri.EMPTY, "River at Dawn", "Test Ensemble", 211_000, 0),
     )
     GusleTheme {
-        AllSongsScreen(songs, onShuffleAll = {}, onSong = {})
+        AllSongsScreen(songs, playing = songs[2], isPlaying = true, onShuffleAll = {}, onSong = {}, onPlayingSong = {})
     }
 }

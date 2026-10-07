@@ -6,6 +6,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
@@ -15,6 +16,7 @@ import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
+import com.sharkula.gusle.GusleApp
 import com.sharkula.gusle.MainActivity
 import com.sharkula.gusle.data.MusicLibrary
 import com.sharkula.gusle.data.Song
@@ -36,6 +38,12 @@ import kotlinx.coroutines.launch
 class PlaybackService : MediaSessionService() {
     private val scope = MainScope()
     private var session: MediaSession? = null
+    private val playing get() = (application as GusleApp).playing
+
+    /** Tells the screens what's playing, so they can show it without connecting. */
+    private val sharePlaying = object : Player.Listener {
+        override fun onEvents(player: Player, events: Player.Events) = playing.update(player)
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -54,6 +62,8 @@ class PlaybackService : MediaSessionService() {
             // Keeps playing with the screen off.
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
+        player.addListener(sharePlaying)
+        playing.update(player)
         session = MediaSession.Builder(this, player)
             // Tapping the watch's media controls opens Gusle, or brings it back if it's open.
             .setSessionActivity(
@@ -73,6 +83,8 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         scope.cancel()
         session?.run {
+            player.removeListener(sharePlaying)
+            playing.clear()
             player.release()
             release()
         }

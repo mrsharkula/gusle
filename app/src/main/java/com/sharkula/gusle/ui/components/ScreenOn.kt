@@ -1,4 +1,4 @@
-package com.sharkula.gusle.ui.nowplaying
+package com.sharkula.gusle.ui.components
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -7,6 +7,7 @@ import android.content.IntentFilter
 import android.os.PowerManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.MotionDurationScale
@@ -16,6 +17,7 @@ import androidx.core.content.getSystemService
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.wear.compose.foundation.LocalReduceMotion
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -63,11 +65,22 @@ fun rememberScreenShown(): State<Boolean> {
 }
 
 /**
+ * Whether anything may move frame by frame: only while Gusle is [shown] (see [rememberScreenShown])
+ * and neither Wear's Reduce motion nor Android's Remove animations is on. Otherwise everything
+ * stands still in its end state.
+ */
+@Composable
+fun rememberMayAnimate(shown: State<Boolean> = rememberScreenShown()): Boolean {
+    val animationsOff by rememberAnimationsOff()
+    return shown.value && !LocalReduceMotion.current && !animationsOff
+}
+
+/**
  * Whether Android's animations are off: Remove animations in the accessibility settings, or the
  * animation scale at 0. Wear's own Reduce motion is a separate setting, LocalReduceMotion.
  */
 @Composable
-fun rememberAnimationsOff(): State<Boolean> = produceState(initialValue = false) {
+private fun rememberAnimationsOff(): State<Boolean> = produceState(initialValue = false) {
     // Compose's own animations already jump then; this is for the ones Gusle runs frame by frame.
     snapshotFlow { coroutineContext[MotionDurationScale]?.scaleFactor == 0f }.collect { value = it }
 }

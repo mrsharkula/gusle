@@ -105,7 +105,6 @@ import androidx.media3.ui.compose.state.rememberNextButtonState
 import androidx.media3.ui.compose.state.rememberPlayPauseButtonState
 import androidx.media3.ui.compose.state.rememberPreviousButtonState
 import androidx.media3.ui.compose.state.rememberShuffleButtonState
-import androidx.wear.compose.foundation.LocalReduceMotion
 import androidx.wear.compose.foundation.requestFocusOnHierarchyActive
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.FilledIconButton
@@ -120,6 +119,8 @@ import com.sharkula.gusle.R
 import com.sharkula.gusle.coverColors
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.playback.songId
+import com.sharkula.gusle.ui.components.rememberMayAnimate
+import com.sharkula.gusle.ui.components.rememberScreenShown
 import com.sharkula.gusle.ui.covers.CoverArt
 import com.sharkula.gusle.ui.covers.NoCoverPainter
 import com.sharkula.gusle.ui.covers.SongCover
@@ -162,7 +163,7 @@ private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: 
     val next = rememberNextButtonState(player)
     val shuffle = rememberShuffleButtonState(player)
     val shown = rememberScreenShown()
-    val animationsOff = rememberAnimationsOff()
+    val animate = rememberMayAnimate(shown)
     val progress = rememberProgress(connection, player, shown)
     val volume = rememberMusicVolume()
 
@@ -197,7 +198,7 @@ private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: 
         art = art,
         isPlaying = !playPause.showPlay,
         progress = { progress.fraction() },
-        animate = shown.value && !LocalReduceMotion.current && !animationsOff.value,
+        animate = animate,
         volume = volume,
         shuffleOn = shuffle.shuffleOn,
         onPrevious = command(previous.isEnabled) { seekToPrevious() },

@@ -1,5 +1,6 @@
 package com.sharkula.gusle.ui.covers
 
+import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import coil3.ImageLoader
@@ -12,6 +13,12 @@ import coil3.key.Keyer
 import coil3.request.Options
 import com.sharkula.gusle.data.Song
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import okio.Buffer
@@ -31,20 +38,10 @@ data class SongCover(val songUri: Uri, val fileModified: Long) {
 class SongCoverFetcher(
     private val cover: SongCover,
     private val options: Options,
-    private val withoutCover: MutableSet<SongCover>,
+    private val pictures: EmbeddedPictures,
 ) : Fetcher {
     override suspend fun fetch(): FetchResult {
-        if (cover in withoutCover) throw NoCoverException()
-        // Reading the file can't be stopped halfway, so skip it for a row already scrolled away.
-        currentCoroutineContext().ensureActive()
-        val picture = MediaMetadataRetriever().use { retriever ->
-            retriever.setDataSource(options.context, cover.songUri)
-            retriever.embeddedPicture
-        }
-        if (picture == null) {
-            withoutCover += cover
-            throw NoCoverException()
-        }
+        val picture = pictures.read(cover, options.context) ?: throw NoCoverException()
         return SourceFetchResult(
             source = ImageSource(Buffer().write(picture), options.fileSystem),
             mimeType = null,
@@ -53,12 +50,45 @@ class SongCoverFetcher(
     }
 
     class Factory : Fetcher.Factory<SongCover> {
-        // Coil keeps loaded covers in memory, but not failures; this keeps a missing cover from
-        // being looked for again every time its row scrolls into view.
-        private val withoutCover = ConcurrentHashMap.newKeySet<SongCover>()
+        private val pictures = EmbeddedPictures()
 
         override fun create(data: SongCover, options: Options, imageLoader: ImageLoader) =
-            SongCoverFetcher(data, options, withoutCover)
+            SongCoverFetcher(data, options, pictures)
+    }
+}
+
+/**
+ * Reads the pictures embedded in song files, which on the watch takes up to a second each. Asked
+ * for the same cover while it's being read, e.g. for a row's thumbnail and for the playing song's
+ * colors, it waits for that read rather than starting another. Only which songs have no cover is
+ * kept afterwards.
+ */
+class EmbeddedPictures {
+    // Coil keeps loaded covers in memory, but not failures; this keeps a missing cover from being
+    // looked for again every time its row scrolls into view.
+    private val withoutCover = ConcurrentHashMap.newKeySet<SongCover>()
+    private val reading = ConcurrentHashMap<SongCover, Deferred<ByteArray?>>()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** [cover]'s picture, or null when the song has none. */
+    suspend fun read(cover: SongCover, context: Context): ByteArray? {
+        if (cover in withoutCover) return null
+        // Reading the file can't be stopped halfway, so skip it for a row already scrolled away.
+        currentCoroutineContext().ensureActive()
+        // Started by the first to wait for it, and goes on when that one stops waiting.
+        val read = reading.computeIfAbsent(cover) {
+            val app = context.applicationContext
+            scope.async(start = CoroutineStart.LAZY) {
+                val picture = MediaMetadataRetriever().use { retriever ->
+                    retriever.setDataSource(app, cover.songUri)
+                    retriever.embeddedPicture
+                }
+                if (picture == null) withoutCover += cover
+                picture
+            }
+        }
+        read.invokeOnCompletion { reading.remove(cover, read) }
+        return read.await()
     }
 }
 

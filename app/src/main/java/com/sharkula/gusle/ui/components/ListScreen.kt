@@ -3,9 +3,12 @@ package com.sharkula.gusle.ui.components
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumnItemScope
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumnScope
@@ -55,28 +58,47 @@ fun ListScreen(
     }
 }
 
+/** Between a row's labels and what's at its end. */
+private val TrailingGap = 10.dp
+
 /**
  * A full-width row in a [ListScreen] that narrows toward the round edges like every other row,
- * given the [transformationSpec] the list hands its content.
+ * given the [transformationSpec] the list hands its content. [trailing] goes at the row's end,
+ * centered on its height, e.g. the playing song's equalizer.
  */
 @Composable
 fun TransformingLazyColumnItemScope.ListButton(
     onClick: () -> Unit,
     transformationSpec: TransformationSpec,
     label: @Composable RowScope.() -> Unit,
+    modifier: Modifier = Modifier,
     secondaryLabel: (@Composable RowScope.() -> Unit)? = null,
     icon: (@Composable BoxScope.() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
     enabled: Boolean = true,
     colors: ButtonColors = ButtonDefaults.buttonColors(),
 ) {
+    // Button has no slot at the end. Its single-slot form takes the icon and labels laid out as
+    // Button lays them out itself, with the same padding and type, and then [trailing]. Every row
+    // uses it, so one that gains or loses [trailing] isn't made anew.
     Button(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
-        secondaryLabel = secondaryLabel,
-        icon = icon,
+        modifier = modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
         enabled = enabled,
         colors = colors,
         transformation = SurfaceTransformation(transformationSpec),
-        label = label,
-    )
+    ) {
+        ButtonDefaults.Content(
+            modifier = Modifier.weight(1f),
+            secondaryLabel = secondaryLabel,
+            icon = icon,
+            enabled = enabled,
+            colors = colors,
+            label = label,
+        )
+        if (trailing != null) {
+            Spacer(Modifier.width(TrailingGap))
+            trailing()
+        }
+    }
 }

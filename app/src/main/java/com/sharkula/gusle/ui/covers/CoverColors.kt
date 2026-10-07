@@ -3,9 +3,15 @@ package com.sharkula.gusle.ui.covers
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.LruCache
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.graphics.scale
 import androidx.wear.compose.material3.ColorScheme
 import coil3.imageLoader
@@ -24,9 +30,14 @@ import com.materialkolor.palettes.TonalPalette
 import com.materialkolor.quantize.QuantizerCelebi
 import com.materialkolor.scheme.SchemeTonalSpot
 import com.materialkolor.score.Score
+import com.sharkula.gusle.coverColors
 import com.sharkula.gusle.ui.theme.DefaultColorScheme
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /** How many covers' colors are kept. A scheme is a few dozen colors, so this is tiny. */
@@ -43,6 +54,12 @@ private const val ColorSampleSize = 64
 private const val CoverColorGroups = 128
 
 /**
+ * A cover that couldn't be read, e.g. while its file is still being written, is tried again after
+ * these waits.
+ */
+private val RetryWaitsMs = longArrayOf(2_000, 8_000)
+
+/**
  * A song's cover as a screen shows it, and its colors. [picture] is null for a song without a
  * cover, or whose cover couldn't be read.
  */
@@ -56,6 +73,24 @@ class CoverArt(val cover: SongCover?, val picture: ImageBitmap?, val colors: Col
  */
 class CoverColors(private val context: Context) {
     private val schemes = LruCache<SongCover, ColorScheme>(KeptSchemes)
+    private val scope = MainScope()
+
+    /**
+     * The colors [show] is working out, so screens asking at the same time share the work. Only
+     * used on the main thread.
+     */
+    private val working = HashMap<SongCover, Deferred<ColorScheme?>>()
+
+    /** The playing song's cover, as [show] last heard of it. */
+    private var playingCover: SongCover? = null
+
+    /**
+     * The playing song's colors, for the screens that show them without its cover (see [show]):
+     * its cover's once they're known, and until then those of the song before, sand at first. A
+     * screen that reads them is composed again when they change. Only used on the main thread.
+     */
+    var playingColors: ColorScheme by mutableStateOf(DefaultColorScheme)
+        private set
 
     /**
      * The art last loaded with [art], so a screen opened again on the same song shows it in its
@@ -67,16 +102,36 @@ class CoverColors(private val context: Context) {
     /** [cover]'s colors if they're known already, so a screen can show them in its first frame. */
     fun known(cover: SongCover?): ColorScheme? = if (cover == null) DefaultColorScheme else schemes[cover]
 
-    /** [cover]'s colors, for a screen that doesn't show the cover itself. */
-    suspend fun of(cover: SongCover?): ColorScheme {
-        if (cover == null) return DefaultColorScheme
-        schemes[cover]?.let { return it }
+    /**
+     * Makes [playingColors] those of the playing song's [cover], once they're known. Screens asking
+     * at the same time share the work, which goes on when they leave, so the colors are kept for
+     * the next one. A cover that couldn't be read is tried again a little later, in sand meanwhile.
+     */
+    suspend fun show(cover: SongCover?) {
+        playingCover = cover
+        var tries = 0
+        while (true) {
+            val colors = if (cover == null) DefaultColorScheme else known(cover) ?: workOut(cover)
+            if (cover == playingCover) playingColors = colors ?: DefaultColorScheme
+            if (colors != null || tries == RetryWaitsMs.size) return
+            delay(RetryWaitsMs[tries++])
+        }
+    }
+
+    /** [cover]'s colors, worked out once for everyone asking meanwhile; null when it couldn't be read. */
+    private suspend fun workOut(cover: SongCover): ColorScheme? {
+        val work = working.getOrPut(cover) { scope.async { readColors(cover) } }
+        work.invokeOnCompletion { working.remove(cover, work) }
+        return work.await()
+    }
+
+    /** Reads a small copy of [cover] and works out its colors; null when it couldn't be read. */
+    private suspend fun readColors(cover: SongCover): ColorScheme? =
         // Only the colors are kept: a small copy in Coil's cache would push full-size covers out.
-        return when (val result = read(cover, ColorSampleSize, Scale.FIT, keep = false)) {
+        when (val result = read(cover, ColorSampleSize, Scale.FIT, keep = false)) {
             is SuccessResult -> colorsOf(cover, result.image.toBitmap())
             is ErrorResult -> noColors(cover, result)
         }
-    }
 
     /**
      * [cover], at least [sizePx] across, with its colors worked out from the same picture: the
@@ -91,7 +146,7 @@ class CoverColors(private val context: Context) {
                     val picture = result.image.toBitmap()
                     CoverArt(cover, picture.asImageBitmap(), known(cover) ?: colorsOf(cover, picture))
                 }
-                is ErrorResult -> CoverArt(cover, null, noColors(cover, result))
+                is ErrorResult -> CoverArt(cover, null, noColors(cover, result) ?: DefaultColorScheme)
             }
         }
         lastArt = art
@@ -116,18 +171,35 @@ class CoverColors(private val context: Context) {
         val scheme = withContext(Dispatchers.Default) {
             mainColor(pixelsOf(sample(picture)))?.let(::coverColorScheme)
         } ?: DefaultColorScheme
+        // Another screen may have worked them out meanwhile. Every screen gets the same ones, so
+        // none is composed again for colors that look the same.
+        schemes[cover]?.let { return it }
         schemes.put(cover, scheme)
         return scheme
     }
 
     /**
-     * The sand colors, for a cover that couldn't be read. They're kept when the song has no cover;
-     * any other failure may pass, so the next time tries again.
+     * The colors for a cover that couldn't be read: sand, kept, when the song has no cover. Any
+     * other failure may pass, so it's null and the next time tries again.
      */
-    private fun noColors(cover: SongCover, result: ErrorResult): ColorScheme {
-        if (result.throwable is NoCoverException) schemes.put(cover, DefaultColorScheme)
+    private fun noColors(cover: SongCover, result: ErrorResult): ColorScheme? {
+        if (result.throwable !is NoCoverException) return null
+        schemes.put(cover, DefaultColorScheme)
         return DefaultColorScheme
     }
+}
+
+/**
+ * The colors for the playing song's [cover], for a screen that shows them without the cover
+ * itself: right away when they're known, otherwise those shown for the song before stay until
+ * they're ready (sand at first). They jump rather than fade, since fading every role would
+ * recompose the whole screen each frame.
+ */
+@Composable
+fun playingSongColors(cover: SongCover?): ColorScheme {
+    val coverColors = LocalContext.current.coverColors
+    LaunchedEffect(cover) { coverColors.show(cover) }
+    return coverColors.known(cover) ?: coverColors.playingColors
 }
 
 /** [picture], or a copy of it at most [ColorSampleSize] across. */

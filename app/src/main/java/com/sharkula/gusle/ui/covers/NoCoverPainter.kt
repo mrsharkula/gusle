@@ -1,5 +1,9 @@
 package com.sharkula.gusle.ui.covers
 
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -15,12 +19,20 @@ import androidx.compose.ui.unit.Dp
  * them.
  */
 class NoCoverPainter(
-    private val note: Painter,
-    private val background: Brush,
+    note: Painter,
+    background: Brush,
     noteColor: Color,
     private val noteSize: Dp,
 ) : Painter() {
-    private val noteTint = ColorFilter.tint(noteColor)
+    /**
+     * What it draws can change, e.g. with the playing song's colors. It's read while drawing, so
+     * it's drawn again also where it's shown already: Coil keeps the painter it showed a failed
+     * load with, rather than taking a new one.
+     */
+    var note by mutableStateOf(note)
+    var background by mutableStateOf(background)
+    var noteColor by mutableStateOf(noteColor)
+    private val noteTint by derivedStateOf { ColorFilter.tint(this.noteColor) }
 
     override val intrinsicSize get() = Size.Unspecified
 
