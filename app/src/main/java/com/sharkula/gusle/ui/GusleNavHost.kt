@@ -28,6 +28,14 @@ private fun MutableList<Screen>.open(screen: Screen) {
 }
 
 /**
+ * Closes the top screen, but never Home: two back events in one frame both arrive before
+ * NavDisplay sees that Home is alone, and an empty back stack makes it throw.
+ */
+private fun MutableList<Screen>.close() {
+    if (size > 1) removeAt(lastIndex)
+}
+
+/**
  * App navigation over the [songs] on the watch. Swiping right (or the back button) returns to
  * the previous screen.
  */
@@ -44,7 +52,7 @@ fun GusleNavHost(songs: Songs.Loaded) {
 
     NavDisplay(
         backStack = backStack,
-        onBack = { backStack.removeLastOrNull() },
+        onBack = { backStack.close() },
         sceneStrategies = listOf(rememberSwipeDismissableSceneStrategy()),
         entryProvider = entryProvider {
             entry<Screen.Home> {
