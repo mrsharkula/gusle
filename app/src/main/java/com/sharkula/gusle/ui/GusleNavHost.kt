@@ -4,15 +4,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSerializable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
+import androidx.navigation3.runtime.NavBackStack
+import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.serialization.NavBackStackSerializer
 import androidx.navigation3.ui.NavDisplay
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
@@ -26,13 +29,26 @@ import com.sharkula.gusle.ui.playback.rememberPlayerConnection
 import com.sharkula.gusle.ui.playback.shuffleAll
 import com.sharkula.gusle.ui.songs.AllSongsScreen
 import com.sharkula.gusle.ui.theme.GusleTheme
+import kotlinx.serialization.Serializable
 
 /** The app's screens. Arguments a screen needs later become properties of its key. */
-sealed interface Screen {
+@Serializable
+sealed interface Screen : NavKey {
+    @Serializable
     data object Home : Screen
+
+    @Serializable
     data object AllSongs : Screen
+
+    @Serializable
     data object NowPlaying : Screen
 }
+
+/**
+ * Saves the back stack. [Screen] is sealed, so its serializer knows every screen, and nothing is
+ * looked up by reflection, which R8 could break.
+ */
+private val BackStackSaving = NavBackStackSerializer(Screen.serializer())
 
 /**
  * Asks the navigation to open Now playing, e.g. when Gusle is opened from the watch's media
@@ -74,15 +90,17 @@ private fun MutableList<Screen>.close(): Boolean {
  */
 @Composable
 fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentBack: () -> Unit) {
-    val backStack = remember {
+    // Saved, so when Android recreates Gusle (a font size change, or its process restored), the
+    // screens come back as they were, each with its own saved state.
+    val backStack = rememberSerializable(serializer = BackStackSaving) {
         // Asked for at launch, it's there from the first frame, with Home behind it.
-        mutableStateListOf<Screen>(Screen.Home).apply {
+        NavBackStack<Screen>(Screen.Home).apply {
             if (openNowPlaying.pending) open(Screen.NowPlaying)
         }
     }
     // The screen a tap opened last, which slides in over the one below. None after going back, or
     // when Now playing opens on request: Gusle is only just coming on the screen then, so it's
-    // there at once.
+    // there at once. Not saved either: a restored stack shows its top screen at once.
     var slidingIn by remember { mutableStateOf<Screen?>(null) }
 
     /** Opens [screen] for a tap. */
