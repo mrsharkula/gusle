@@ -3,6 +3,7 @@ package com.sharkula.gusle
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.wear.compose.material3.AppScaffold
@@ -24,6 +25,9 @@ fun Context.nowPlayingIntent(): Intent = Intent().setClassName(this, OpenNowPlay
 class MainActivity : ComponentActivity() {
     private val openNowPlaying = NowPlayingRequest()
 
+    /** Set when the navigation goes back, until the next touch; see [dispatchTouchEvent]. */
+    private var wentBack = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Not when the activity is created again, e.g. after a font size change: it was asked then.
@@ -34,12 +38,25 @@ class MainActivity : ComponentActivity() {
                 AppScaffold {
                     MusicAccessGate {
                         SongsGate(library) { songs ->
-                            GusleNavHost(songs, openNowPlaying)
+                            GusleNavHost(songs, openNowPlaying, onWentBack = { wentBack = true })
                         }
                     }
                 }
             }
         }
+    }
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        // On the watch, the first touch after swiping back did nothing, as if the swipe were still
+        // going on; the next one worked. A cancel first starts it from a clean slate. Checked on the
+        // watch with the same 300 ms slides: without it, that first tap was lost every time.
+        if (wentBack && event.actionMasked == MotionEvent.ACTION_DOWN) {
+            wentBack = false
+            val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+            super.dispatchTouchEvent(cancel)
+            cancel.recycle()
+        }
+        return super.dispatchTouchEvent(event)
     }
 
     // Launched again while it's open (it's single-top), e.g. from the media controls.

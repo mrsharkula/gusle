@@ -69,10 +69,11 @@ private fun MutableList<Screen>.close(): Boolean {
 
 /**
  * App navigation over the [songs] on the watch. Swiping right (or the back button) returns to
- * the previous screen. [openNowPlaying] opens Now playing on top of the screen that's shown.
+ * the previous screen, and then calls [onWentBack]. [openNowPlaying] opens Now playing on top of
+ * the screen that's shown.
  */
 @Composable
-fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest) {
+fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentBack: () -> Unit) {
     val backStack = remember {
         // Asked for at launch, it's there from the first frame, with Home behind it.
         mutableStateListOf<Screen>(Screen.Home).apply {
@@ -112,7 +113,10 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest) {
     NavDisplay(
         backStack = backStack,
         onBack = {
-            if (backStack.close()) slidingIn = null
+            if (backStack.close()) {
+                slidingIn = null
+                onWentBack()
+            }
         },
         sceneStrategies = listOf(rememberStackSceneStrategy()),
         entryProvider = entryProvider {
