@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What Android may back up, or move to a new watch. Everything but the queue Gusle comes back to
+     (playback/LastPlayed.kt): it names songs by their MediaStore IDs, which are other songs, or
+     none, on another watch or after the music is copied again. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="last_played_queue.xml" />
+        <exclude domain="sharedpref" path="last_played_position.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="last_played_queue.xml" />
+        <exclude domain="sharedpref" path="last_played_position.xml" />
+    </device-transfer>
+</data-extraction-rules>

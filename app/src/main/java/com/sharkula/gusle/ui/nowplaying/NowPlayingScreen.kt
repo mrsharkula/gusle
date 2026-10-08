@@ -197,7 +197,7 @@ private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: 
         artist = (metadata.artist ?: song?.artist)?.toString(),
         art = art,
         isPlaying = !playPause.showPlay,
-        progress = { progress.fraction() },
+        progress = { progress.fraction(song?.durationMs ?: 0) },
         animate = animate,
         volume = volume,
         shuffleOn = shuffle.shuffleOn,
@@ -231,9 +231,15 @@ private fun rememberProgress(
     return progress
 }
 
+/**
+ * How far it is through the song. Until the song is prepared, e.g. when the player comes back to
+ * it paused, the player doesn't know its length yet, so it's [songDurationMs] (MediaStore's).
+ */
 @OptIn(UnstableApi::class)
-private fun ProgressStateWithTickInterval.fraction(): Float =
-    if (durationMs > 0) (currentPositionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+private fun ProgressStateWithTickInterval.fraction(songDurationMs: Long): Float {
+    val duration = durationMs.takeIf { it > 0 } ?: songDurationMs
+    return if (duration > 0) (currentPositionMs.toFloat() / duration).coerceIn(0f, 1f) else 0f
+}
 
 /** The design is drawn for a screen this many dp across: the OnePlus Watch 4's. */
 private const val DesignWidth = 233f

@@ -89,6 +89,13 @@ class MusicLibrary(context: Context) {
         }.also { read = it }
     }
 
+    /**
+     * The read going on, or a new one if none is. Unlike [refresh], it doesn't read again
+     * afterwards: for callers that need the songs read, not read anew.
+     */
+    @MainThread
+    fun readIfIdle(): Job = read?.takeIf { it.isActive } ?: refresh()
+
     /** Null when MediaStore couldn't be read. */
     private fun readSongs(): Songs? {
         // Checked here too, not only by the screens: the playback service can start without them.
