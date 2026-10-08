@@ -1,8 +1,5 @@
 package com.sharkula.gusle.ui
 
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -17,7 +14,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
-import androidx.wear.compose.navigation3.rememberSwipeDismissableSceneStrategy
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.playingSong
@@ -48,20 +44,27 @@ class NowPlayingRequest {
     var pending by mutableStateOf(false)
 }
 
-/** A screen's metadata for opening it without animation. */
-private val NoTransition = NavDisplay.transitionSpec { EnterTransition.None togetherWith ExitTransition.None }
-
-/** Opens [screen] unless it's already on top, so a double tap can't stack it twice. */
-private fun MutableList<Screen>.open(screen: Screen) {
-    if (lastOrNull() != screen) add(screen)
+/**
+ * Opens [screen] on top, or goes back to it if it's lower down already: a screen is never in the
+ * stack twice, since the screens below the top one are kept composed. A double tap doesn't stack it
+ * twice either. Returns whether it was added.
+ */
+private fun MutableList<Screen>.open(screen: Screen): Boolean {
+    val at = indexOf(screen)
+    if (at < 0) return add(screen)
+    while (lastIndex > at) removeAt(lastIndex)
+    return false
 }
 
 /**
  * Closes the top screen, but never Home: two back events in one frame both arrive before
- * NavDisplay sees that Home is alone, and an empty back stack makes it throw.
+ * NavDisplay sees that Home is alone, and an empty back stack makes it throw. Returns whether a
+ * screen closed.
  */
-private fun MutableList<Screen>.close() {
-    if (size > 1) removeAt(lastIndex)
+private fun MutableList<Screen>.close(): Boolean {
+    if (size == 1) return false
+    removeAt(lastIndex)
+    return true
 }
 
 /**
@@ -76,15 +79,21 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest) {
             if (openNowPlaying.pending) open(Screen.NowPlaying)
         }
     }
-    // Opened on request, Now playing is there at once rather than sliding in over the screen that
-    // was left, since Gusle is only just coming on the screen. Taps inside Gusle slide it in as
-    // usual again after the next back.
-    var jumpToNowPlaying by remember { mutableStateOf(false) }
+    // The screen a tap opened last, which slides in over the one below. None after going back, or
+    // when Now playing opens on request: Gusle is only just coming on the screen then, so it's
+    // there at once.
+    var slidingIn by remember { mutableStateOf<Screen?>(null) }
+
+    /** Opens [screen] for a tap. */
+    fun go(screen: Screen) {
+        if (backStack.open(screen)) slidingIn = screen
+    }
+
     // Taken here rather than above, so it isn't lost if that first composition is thrown away.
     LaunchedEffect(openNowPlaying) {
         snapshotFlow { openNowPlaying.pending }.collect { pending ->
             if (pending) {
-                jumpToNowPlaying = true
+                slidingIn = null
                 backStack.open(Screen.NowPlaying)
                 openNowPlaying.pending = false
             }
@@ -95,16 +104,17 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest) {
     /** Starts playing (connecting first if needed), and opens Now playing on it. */
     fun play(action: Player.() -> Unit) {
         player.withPlayer(action)
-        backStack.open(Screen.NowPlaying)
+        go(Screen.NowPlaying)
     }
+
+    fun slidesIn(screen: Screen) = if (slidingIn == screen) SlideIn else emptyMap()
 
     NavDisplay(
         backStack = backStack,
         onBack = {
-            backStack.close()
-            jumpToNowPlaying = false
+            if (backStack.close()) slidingIn = null
         },
-        sceneStrategies = listOf(rememberSwipeDismissableSceneStrategy()),
+        sceneStrategies = listOf(rememberStackSceneStrategy()),
         entryProvider = entryProvider {
             entry<Screen.Home> {
                 PlayingSongTheme(songs) { playing, isPlaying ->
@@ -113,13 +123,13 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest) {
                         playing = playing,
                         isPlaying = isPlaying,
                         // It goes on as it is.
-                        onPlaying = { backStack.open(Screen.NowPlaying) },
-                        onAllSongs = { backStack.open(Screen.AllSongs) },
+                        onPlaying = { go(Screen.NowPlaying) },
+                        onAllSongs = { go(Screen.AllSongs) },
                         onSettings = {},
                     )
                 }
             }
-            entry<Screen.AllSongs> {
+            entry<Screen.AllSongs>(metadata = slidesIn(Screen.AllSongs)) {
                 PlayingSongTheme(songs) { playing, isPlaying ->
                     AllSongsScreen(
                         songs.list,
@@ -128,11 +138,11 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest) {
                         onShuffleAll = { play { shuffleAll(songs.list) } },
                         onSong = { index -> play { playFrom(songs.list, index) } },
                         // Rather than starting it again: on a watch, taps happen by accident.
-                        onPlayingSong = { backStack.open(Screen.NowPlaying) },
+                        onPlayingSong = { go(Screen.NowPlaying) },
                     )
                 }
             }
-            entry<Screen.NowPlaying>(metadata = if (jumpToNowPlaying) NoTransition else emptyMap()) {
+            entry<Screen.NowPlaying>(metadata = slidesIn(Screen.NowPlaying)) {
                 NowPlayingScreen(player, songs.byId)
             }
         },
