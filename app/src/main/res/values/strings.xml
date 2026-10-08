@@ -29,6 +29,9 @@
     <string name="shuffle_on">Shuffle on</string>
     <string name="playing">Playing</string>
     <string name="paused">Paused</string>
+    <string name="cant_play_song">Can\'t play this song</string>
+    <string name="cant_play_titled">Can\'t play “%1$s”</string>
+    <string name="cant_play_now">Can\'t play right now</string>
     <plurals name="song_count">
         <item quantity="one">%d song</item>
         <item quantity="other">%d songs</item>

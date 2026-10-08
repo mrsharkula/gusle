@@ -4,6 +4,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
 import android.net.Uri
+import android.os.SystemClock
 import androidx.annotation.DrawableRes
 import androidx.annotation.OptIn
 import androidx.compose.animation.core.Animatable
@@ -81,6 +82,9 @@ import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
@@ -105,6 +109,7 @@ import androidx.media3.ui.compose.state.rememberNextButtonState
 import androidx.media3.ui.compose.state.rememberPlayPauseButtonState
 import androidx.media3.ui.compose.state.rememberPreviousButtonState
 import androidx.media3.ui.compose.state.rememberShuffleButtonState
+import androidx.wear.compose.foundation.LocalScreenIsActive
 import androidx.wear.compose.foundation.requestFocusOnHierarchyActive
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.FilledIconButton
@@ -118,6 +123,7 @@ import androidx.wear.tooling.preview.devices.WearDevices
 import com.sharkula.gusle.R
 import com.sharkula.gusle.coverColors
 import com.sharkula.gusle.data.Song
+import com.sharkula.gusle.playback.UnplayableSongs
 import com.sharkula.gusle.playback.songId
 import com.sharkula.gusle.ui.components.rememberMayAnimate
 import com.sharkula.gusle.ui.components.rememberScreenShown
@@ -129,12 +135,15 @@ import com.sharkula.gusle.ui.playback.PlayerConnection
 import com.sharkula.gusle.ui.playback.rememberShownPlayer
 import com.sharkula.gusle.ui.theme.DefaultColorScheme
 import com.sharkula.gusle.ui.theme.GusleTheme
+import com.sharkula.gusle.unplayableSongs
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
@@ -166,6 +175,7 @@ private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: 
     val animate = rememberMayAnimate(shown)
     val progress = rememberProgress(connection, player, shown)
     val volume = rememberMusicVolume()
+    val cantPlay = rememberCantPlay(shown)
 
     val mediaItem = item.mediaItem
     // Right after a tap, the player knows only the song's ID until the playback service has looked
@@ -201,10 +211,36 @@ private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: 
         animate = animate,
         volume = volume,
         shuffleOn = shuffle.shuffleOn,
+        cantPlay = cantPlay::value,
         onPrevious = command(previous.isEnabled) { seekToPrevious() },
         onPlayPause = command(playPause.isEnabled) { Util.handlePlayPauseButtonAction(this) },
         onNext = command(next.isEnabled) { seekToNext() },
     )
+}
+
+/** How long it says a song can't be played after it fails. */
+private const val CantPlayMs = 2500L
+
+/**
+ * The song that just failed to play (the playback service skipped it, or stopped), to say so for a
+ * moment while this screen is [shown] and on top; null otherwise. A failure from just before, e.g.
+ * right after the tap that opened it, shows for what's left of that moment.
+ */
+@Composable
+private fun rememberCantPlay(shown: State<Boolean>): State<UnplayableSongs.Failure?> {
+    val lastFailure = LocalContext.current.unplayableSongs.lastFailure
+    val onTop = LocalScreenIsActive.current
+    return produceState<UnplayableSongs.Failure?>(initialValue = null, lastFailure, shown, onTop) {
+        combine(snapshotFlow { shown.value && onTop }, lastFailure) { visible, failure -> failure.takeIf { visible } }
+            .collectLatest { failure ->
+                val left = if (failure == null) 0 else failure.atMs + CantPlayMs - SystemClock.elapsedRealtime()
+                value = failure.takeIf { left > 0 }
+                if (left > 0) {
+                    delay(left)
+                    value = null
+                }
+            }
+    }
 }
 
 /** Light on the battery, and still smooth: a step moves the ring a few pixels. */
@@ -265,6 +301,8 @@ private fun NowPlaying(
     volume: Volume,
     /** Shows a small shuffle icon while the songs play in random order. */
     shuffleOn: Boolean,
+    /** The song that just failed, to say it can't be played; null otherwise. Read only by the message. */
+    cantPlay: () -> UnplayableSongs.Failure?,
     /** Null while there's nothing to go back to, which disables the button; likewise the others. */
     onPrevious: (() -> Unit)?,
     onPlayPause: (() -> Unit)?,
@@ -317,6 +355,14 @@ private fun NowPlaying(
                     onNext,
                     Modifier.align(Alignment.TopCenter).padding(top = 90.dp),
                 )
+                // Between the title and the controls, over the cover.
+                CantPlayMessage(
+                    cantPlay,
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(start = 30.dp, top = 67.dp, end = 30.dp)
+                        .fillMaxWidth(),
+                )
                 if (!artist.isNullOrBlank()) {
                     Text(
                         artist,
@@ -344,6 +390,30 @@ private fun NowPlaying(
             }
         }
     }
+}
+
+/**
+ * Says the song that [failed] can't be played, by its title, or that nothing can be played right
+ * now when it wasn't the song's fault; nothing while it's null. In the primary color, and read out
+ * by accessibility services when it appears, without interrupting.
+ */
+@Composable
+private fun CantPlayMessage(failed: () -> UnplayableSongs.Failure?, modifier: Modifier) {
+    // Read here, so a failure composes just the message again.
+    val failure = failed() ?: return
+    Text(
+        when {
+            !failure.songsFault -> stringResource(R.string.cant_play_now)
+            failure.title != null -> stringResource(R.string.cant_play_titled, failure.title)
+            else -> stringResource(R.string.cant_play_song)
+        },
+        modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        color = MaterialTheme.colorScheme.primary,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        style = designText(12, FontWeight.Medium, shadowAlpha = 0.85f),
+    )
 }
 
 /** A small shuffle icon in the artist's color, saying "Shuffle on" to accessibility services. */
@@ -801,6 +871,7 @@ private fun NowPlayingPreview(title: String, artist: String?, art: CoverArt, isP
                     animate = false,
                     volume = PreviewVolume,
                     shuffleOn = shuffleOn,
+                    cantPlay = { null },
                     onPrevious = {},
                     onPlayPause = {},
                     onNext = {},

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Makes a few test songs like the ones on the watch (Opus and M4A, tagged, some with an embedded
 # cover) and copies them to the Wear OS emulator, into the folder Wear Files uses on the watch.
-# Android indexes them as music on its own. Also adds one notification sound, which Gusle must
-# not list.
+# Android indexes them as music on its own. Also adds a few songs that can't be played, which
+# Gusle must skip, and one notification sound, which it must not list.
 #
 # Usage: scripts/push-test-songs.sh [--remove] [emulator-serial]
 # --remove deletes the test songs again. Without a serial, the first running Wear OS emulator
@@ -54,11 +54,28 @@ songs=(
     "Šumadija.opus|Šumadija|Test Ensemble|90|600x600:0x6A1B9A"
 )
 
+# Songs that can't be played: file, and how it's broken. "bytes" is random bytes, which fail at
+# once (one sorts second, one last); "cut" is a real song cut off at 40%, which fails as it plays.
+broken=(
+    "Broken bytes.opus|bytes"
+    "Cut short.m4a|cut"
+    "Zz broken.opus|bytes"
+)
+
+# Android lists a pushed file right away, but only reads its tags (title, artist, length, whether
+# it's music) when asked to scan it. Scanning a deleted file removes it from the list.
+scan() {
+    "$adb" -s "$serial" shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
+        -d "\"file://$1\"" >/dev/null
+}
+
 if $remove; then
-    for song in "${songs[@]}"; do
+    for song in "${songs[@]}" "${broken[@]}"; do
         "$adb" -s "$serial" shell rm -f "\"$songs_dir/${song%%|*}\""
+        scan "$songs_dir/${song%%|*}"
     done
     "$adb" -s "$serial" shell rm -f "\"$sound\""
+    scan "$sound"
     echo "Removed the test songs from $serial."
     exit 0
 fi
@@ -112,21 +129,30 @@ for song in "${songs[@]}"; do
             ;;
     esac
 done
+for song in "${broken[@]}"; do
+    IFS='|' read -r file how <<<"$song"
+    case "$how" in
+        bytes) head -c 40000 /dev/urandom >"$work/$file" ;;
+        cut)
+            # The index up front (faststart), so it starts playing and runs out of audio partway.
+            ffmpeg -loglevel error -y -f lavfi -i "sine=frequency=330:duration=60,volume=0.1" -c:a aac -b:a 48k \
+                -movflags +faststart -metadata "title=Cut Short" -metadata "artist=Test Trio" "$work/whole.m4a"
+            head -c $(($(wc -c <"$work/whole.m4a") * 4 / 10)) "$work/whole.m4a" >"$work/$file"
+            ;;
+    esac
+done
 ffmpeg -loglevel error -y -f lavfi -i "sine=frequency=880:duration=1" -c:a libvorbis "$work/ping.ogg"
 
-# Android lists a pushed file right away, but only reads its tags (title, artist, length, whether
-# it's music) when asked to scan it.
 push() {
     "$adb" -s "$serial" push -q "$1" "$2"
-    "$adb" -s "$serial" shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
-        -d "\"file://$2\"" >/dev/null
+    scan "$2"
 }
 
 "$adb" -s "$serial" shell mkdir -p "$songs_dir" "\"${sound%/*}\""
-for song in "${songs[@]}"; do
+for song in "${songs[@]}" "${broken[@]}"; do
     file="${song%%|*}"
     push "$work/$file" "$songs_dir/$file"
 done
 push "$work/ping.ogg" "$sound"
 
-echo "Pushed ${#songs[@]} test songs to $serial:$songs_dir, and a notification sound."
+echo "Pushed ${#songs[@]} test songs and ${#broken[@]} broken ones to $serial:$songs_dir, and a notification sound."

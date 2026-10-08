@@ -39,7 +39,7 @@ data class SavedQueue(
         val newCurrent = if (stays) {
             newIndex[current]
         } else {
-            val next = playOrder.drop(playOrder.indexOf(current) + 1).firstOrNull { newIndex[it] >= 0 }
+            val next = nextPlayable(playOrder, current, backwards = false) { newIndex[it] >= 0 }
             newIndex[next ?: playOrderLeft.last()]
         }
         return SavedQueue(

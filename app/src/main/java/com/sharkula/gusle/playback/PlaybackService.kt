@@ -6,7 +6,6 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
@@ -39,7 +38,8 @@ private const val SaveEveryMs = 10_000L
 /**
  * Plays the songs, also in the background, and shows them in the watch's media controls. The
  * screens connect to it with a MediaController and ask for songs by their [mediaId]s. It saves the
- * queue it plays ([LastPlayed]), and comes back to it, paused, when it starts again.
+ * queue it plays ([LastPlayed]), and comes back to it, paused, when it starts again. Songs it can't
+ * play are skipped ([SessionPlayer]).
  *
  * Swiping Gusle away from the recent apps stops the service unless it's playing (that's what
  * MediaSessionService's own onTaskRemoved does), once nothing is connected to it anymore. Only
@@ -50,6 +50,7 @@ class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
     private val playing get() = (application as GusleApp).playing
     private val lastPlayed get() = (application as GusleApp).lastPlayed
+    private val unplayable get() = (application as GusleApp).unplayable
     private var savingWhilePlaying: Job? = null
 
     /**
@@ -77,7 +78,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        val player = ExoPlayer.Builder(this)
+        val exoPlayer = ExoPlayer.Builder(this)
             // Handling audio focus pauses for calls and when another app starts playing.
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -92,6 +93,7 @@ class PlaybackService : MediaSessionService() {
             // Keeps playing with the screen off.
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
+        val player: Player = SessionPlayer(exoPlayer, unplayable)
         player.addListener(followPlayer)
         val lookup = SongLookup(musicLibrary, lastPlayed, packageName, scope)
         session = MediaSession.Builder(this, player)
@@ -108,7 +110,7 @@ class PlaybackService : MediaSessionService() {
         // is newer, so then it stays.
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             val queue = lookup.lastQueue()
-            if (queue != null && player.mediaItemCount == 0) player.restore(queue)
+            if (queue != null && player.mediaItemCount == 0) exoPlayer.restore(queue)
         }
         playing.update(player)
     }
@@ -122,6 +124,7 @@ class PlaybackService : MediaSessionService() {
             save(player)
             playing.serviceStopped()
             player.release()
+            unplayable.serviceStopped()
             release()
         }
         session = null
@@ -160,20 +163,11 @@ private fun Player.savedQueue(): SavedQueue? {
     val songIds = List(mediaItemCount) { getMediaItemAt(it).songId ?: return null }
     return SavedQueue(
         songIds,
-        shuffleOrder = if (shuffleModeEnabled) currentTimeline.shuffledWindows() else null,
+        shuffleOrder = if (shuffleModeEnabled) currentTimeline.playOrder(shuffled = true) else null,
         current = currentMediaItemIndex,
         // After the last song has ended, it comes back from that song's start, not its very end.
         positionMs = if (playbackState == Player.STATE_ENDED) 0 else currentPosition,
     )
-}
-
-/** The timeline's windows (the player's songs) in the order they play while shuffled. */
-private fun Timeline.shuffledWindows(): List<Int> = buildList {
-    var window = getFirstWindowIndex(/* shuffleModeEnabled= */ true)
-    while (window != C.INDEX_UNSET) {
-        add(window)
-        window = getNextWindowIndex(window, Player.REPEAT_MODE_OFF, /* shuffleModeEnabled= */ true)
-    }
 }
 
 /** A saved queue as far as its songs are still on the watch, with the items that play them. */
@@ -199,12 +193,17 @@ private class SongLookup(
     private val gusle: String,
     private val scope: CoroutineScope,
 ) : MediaSession.Callback {
-    @OptIn(UnstableApi::class) // isTrusted
+    @OptIn(UnstableApi::class) // isTrusted, AcceptedResultBuilder
     override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): ConnectionResult =
         // Trusted: the system, e.g. the watch's media controls. Anyone else could find out which
         // songs are on the watch by asking to play IDs, without being allowed to read music.
         if (controller.packageName == gusle || controller.isTrusted) {
-            super.onConnect(session, controller)
+            ConnectionResult.AcceptedResultBuilder(session, controller)
+                // Songs play once through; nothing may turn repeat on.
+                .setAvailablePlayerCommands(
+                    ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon().remove(Player.COMMAND_SET_REPEAT_MODE).build(),
+                )
+                .build()
         } else {
             ConnectionResult.reject()
         }
