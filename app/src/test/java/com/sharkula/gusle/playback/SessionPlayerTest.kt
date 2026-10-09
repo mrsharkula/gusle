@@ -6,10 +6,14 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ShuffleOrder
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
+import kotlin.random.Random
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -24,7 +28,7 @@ class SessionPlayerTest {
     private fun player(current: Int, shuffleOrder: List<Int>? = null): Pair<SessionPlayer, FakePlayer> {
         val fake = FakePlayer(listOf(10L, 20L, 30L, 40L), shuffleOrder)
         fake.current = current
-        return SessionPlayer(fake.player, unplayable) to fake
+        return SessionPlayer(fake.player, unplayable, Random(7)) to fake
     }
 
     @Test
@@ -143,6 +147,50 @@ class SessionPlayerTest {
     }
 
     @Test
+    fun turningShuffleOnKeepsTheSongFirst() {
+        val (player, fake) = player(current = 2)
+        player.shuffleModeEnabled = true
+        assertEquals(listOf("order", "shuffle on"), fake.done)
+        assertEquals(2, fake.shuffleOrder.first())
+        assertEquals(listOf(0, 1, 2, 3), fake.shuffleOrder.sorted())
+    }
+
+    @Test
+    fun drawsANewOrderEachTimeShuffleGoesOn() {
+        val (player, fake) = player(current = 0)
+        val orders = List(5) {
+            player.shuffleModeEnabled = true
+            player.shuffleModeEnabled = false
+            fake.shuffleOrder
+        }
+        assertTrue(orders.all { it.first() == 0 })
+        assertNotEquals(1, orders.toSet().size)
+    }
+
+    @Test
+    fun skipsInTheNewOrder() {
+        val (player, fake) = player(current = 2)
+        player.shuffleModeEnabled = true
+        fake.done.clear()
+        player.songFailed(SongsFault)
+        assertEquals(listOf("seek ${fake.shuffleOrder[1]}", "prepare"), fake.done)
+    }
+
+    @Test
+    fun keepsTheOrderWhenShuffleIsOnAlready() {
+        val (player, fake) = player(current = 0, shuffleOrder = listOf(2, 0, 3, 1))
+        player.shuffleModeEnabled = true
+        assertEquals(listOf("shuffle on"), fake.done)
+    }
+
+    @Test
+    fun turnsShuffleOffAsItIs() {
+        val (player, fake) = player(current = 0, shuffleOrder = listOf(2, 0, 3, 1))
+        player.shuffleModeEnabled = false
+        assertEquals(listOf("shuffle off"), fake.done)
+    }
+
+    @Test
     fun walksThePlayOrder() {
         val timeline = TestTimeline(4, shuffleOrder = listOf(2, 0, 3, 1))
         assertEquals(listOf(0, 1, 2, 3), timeline.playOrder(shuffled = false))
@@ -152,8 +200,9 @@ class SessionPlayerTest {
 }
 
 /**
- * A player with the songs [songIds], played in [shuffleOrder] while shuffled, as far as
- * [SessionPlayer] uses it. It records the seeks, prepares and pauses that reach it in [done].
+ * An ExoPlayer with the songs [songIds], played in [shuffleOrder] while shuffled, as far as
+ * [SessionPlayer] uses it. It records the seeks, prepares, pauses and shuffle changes that reach it
+ * in [done], and the last shuffle order set in [shuffleOrder].
  */
 private class FakePlayer(songIds: List<Long>, shuffleOrder: List<Int>?) : InvocationHandler {
     private val items = songIds.map { id ->
@@ -162,8 +211,8 @@ private class FakePlayer(songIds: List<Long>, shuffleOrder: List<Int>?) : Invoca
             .setMediaMetadata(MediaMetadata.Builder().setTitle("Song $id").build())
             .build()
     }
-    private val timeline = TestTimeline(songIds.size, shuffleOrder)
-    private val shuffled = shuffleOrder != null
+    private var timeline = TestTimeline(songIds.size, shuffleOrder)
+    private var shuffled = shuffleOrder != null
     private val listeners = mutableListOf<Player.Listener>()
 
     var current = 0
@@ -172,7 +221,8 @@ private class FakePlayer(songIds: List<Long>, shuffleOrder: List<Int>?) : Invoca
     var previousRestarts = false
 
     val done = mutableListOf<String>()
-    val player = Proxy.newProxyInstance(Player::class.java.classLoader, arrayOf(Player::class.java), this) as Player
+    var shuffleOrder = emptyList<Int>()
+    val player = Proxy.newProxyInstance(ExoPlayer::class.java.classLoader, arrayOf(ExoPlayer::class.java), this) as ExoPlayer
     val hasListeners get() = listeners.isNotEmpty()
 
     fun reportState(state: Int) = listeners.toList().forEach { it.onPlaybackStateChanged(state) }
@@ -185,8 +235,21 @@ private class FakePlayer(songIds: List<Long>, shuffleOrder: List<Int>?) : Invoca
             "getCurrentMediaItemIndex" -> return current
             "getCurrentMediaItem" -> return items[current]
             "getMediaItemAt" -> return items[arg(0) as Int]
+            "getMediaItemCount" -> return items.size
             "getCurrentTimeline" -> return timeline
             "getShuffleModeEnabled" -> return shuffled
+            "setShuffleModeEnabled" -> {
+                shuffled = arg(0) as Boolean
+                done += if (shuffled) "shuffle on" else "shuffle off"
+            }
+            "setShuffleOrder" -> {
+                val order = arg(0) as ShuffleOrder
+                shuffleOrder = generateSequence(order.firstIndex.takeIf { it != C.INDEX_UNSET }) { i ->
+                    order.getNextIndex(i).takeIf { it != C.INDEX_UNSET }
+                }.toList()
+                timeline = TestTimeline(items.size, shuffleOrder)
+                done += "order"
+            }
             "seekToPrevious", "seekToPreviousMediaItem" -> if (!previousRestarts) {
                 current = timeline.getPreviousWindowIndex(current, Player.REPEAT_MODE_OFF, shuffled)
                     .takeIf { it != C.INDEX_UNSET } ?: current

@@ -13,6 +13,8 @@ import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -70,6 +72,10 @@ import androidx.compose.ui.graphics.vector.VectorGroup
 import androidx.compose.ui.graphics.vector.VectorPath
 import androidx.compose.ui.graphics.vector.toPath
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -82,7 +88,9 @@ import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -137,6 +145,7 @@ import com.sharkula.gusle.ui.theme.DefaultColorScheme
 import com.sharkula.gusle.ui.theme.GusleTheme
 import com.sharkula.gusle.unplayableSongs
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -149,23 +158,23 @@ import kotlinx.coroutines.launch
 /**
  * The player: the playing song's cover in the middle, fading into black, its title, the controls
  * and its artist, and its progress along the edge. It follows the player wherever it's controlled
- * from, e.g. the watch's media controls.
+ * from, e.g. the watch's media controls. Swiping left opens the queue ([onQueue]).
  */
 @Composable
-fun NowPlayingScreen(connection: PlayerConnection, songsById: Map<Long, Song>) {
+fun NowPlayingScreen(connection: PlayerConnection, songsById: Map<Long, Song>, onQueue: () -> Unit) {
     val player = connection.rememberShownPlayer()
 
     ScreenScaffold {
         // Just the clock until the player first connects, which takes milliseconds.
         if (player != null) {
-            NowPlaying(connection, player, songsById)
+            NowPlaying(connection, player, songsById, onQueue)
         }
     }
 }
 
 @OptIn(UnstableApi::class)
 @Composable
-private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: Map<Long, Song>) {
+private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: Map<Long, Song>, onQueue: () -> Unit) {
     val item = rememberCurrentMediaItemState(player)
     val playPause = rememberPlayPauseButtonState(player)
     val previous = rememberPreviousButtonState(player)
@@ -215,6 +224,7 @@ private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: 
         onPrevious = command(previous.isEnabled) { seekToPrevious() },
         onPlayPause = command(playPause.isEnabled) { Util.handlePlayPauseButtonAction(this) },
         onNext = command(next.isEnabled) { seekToNext() },
+        onQueue = onQueue,
     )
 }
 
@@ -307,7 +317,10 @@ private fun NowPlaying(
     onPrevious: (() -> Unit)?,
     onPlayPause: (() -> Unit)?,
     onNext: (() -> Unit)?,
+    /** A swipe left; also an accessibility action, as screen readers take swipes for themselves. */
+    onQueue: () -> Unit,
 ) {
+    val queueLabel = stringResource(R.string.queue)
     val haptics = LocalHapticFeedback.current
     val crownStepPx = with(LocalDensity.current) { CrownStep.toPx() }
     val crown = remember(crownStepPx) { CrownSteps(crownStepPx) }
@@ -316,6 +329,7 @@ private fun NowPlaying(
             Box(
                 Modifier
                     .fillMaxSize()
+                    .onSwipeLeft(onQueue)
                     // The crown changes the volume while this screen is shown.
                     .onRotaryScrollEvent { event ->
                         crown.turn(event.verticalScrollPixels, event.uptimeMillis) { up ->
@@ -340,7 +354,9 @@ private fun NowPlaying(
                         // A title that fits stays centered.
                         .wrapContentWidth()
                         // One that doesn't scrolls slowly instead of ending in "…".
-                        .then(if (animate) Modifier.slowMarquee() else Modifier),
+                        .then(if (animate) Modifier.slowMarquee() else Modifier)
+                        // On the title, the first thing a screen reader reads out.
+                        .semantics { customActions = listOf(CustomAccessibilityAction(queueLabel) { onQueue(); true }) },
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
@@ -414,6 +430,45 @@ private fun CantPlayMessage(failed: () -> UnplayableSongs.Failure?, modifier: Mo
         overflow = TextOverflow.Ellipsis,
         style = designText(12, FontWeight.Medium, shadowAlpha = 0.85f),
     )
+}
+
+/** A swipe left at least this far opens the queue, as does a quicker one of any length. */
+private val SwipeDistance = 48.dp
+private val SwipeSpeed = 400.dp // per second
+
+/**
+ * Calls [onSwipe] when a finger swipes left: far enough, or quickly. Once a drag goes left, it's
+ * taken from the controls under it, so they don't take it for a tap. Drags that go right, up or
+ * down are left alone, for going back and for the controls.
+ */
+private fun Modifier.onSwipeLeft(onSwipe: () -> Unit): Modifier = pointerInput(onSwipe) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val velocity = VelocityTracker().apply { addPointerInputChange(down) }
+        var swiping = false
+        while (true) {
+            // The main pass, after the controls: what's taken here, they see taken and cancel.
+            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
+            // With the samples batched into the event, for a true speed.
+            velocity.addPointerInputChange(change)
+            val moved = change.position - down.position
+            if (!swiping) {
+                if (!change.pressed) return@awaitEachGesture
+                if (moved.getDistance() < viewConfiguration.touchSlop) continue
+                // Mostly to the left, or it's not a swipe for the queue.
+                if (moved.x > 0 || abs(moved.y) > abs(moved.x)) return@awaitEachGesture
+                swiping = true
+            }
+            if (!change.pressed) {
+                // Lifted, rather than cancelled (e.g. the screen going off), which also ends it, taken.
+                val swiped = -moved.x >= SwipeDistance.toPx() || -velocity.calculateVelocity().x >= SwipeSpeed.toPx()
+                if (change.changedToUp() && swiped) onSwipe()
+                change.consume()
+                return@awaitEachGesture
+            }
+            change.consume()
+        }
+    }
 }
 
 /** A small shuffle icon in the artist's color, saying "Shuffle on" to accessibility services. */
@@ -875,6 +930,7 @@ private fun NowPlayingPreview(title: String, artist: String?, art: CoverArt, isP
                     onPrevious = {},
                     onPlayPause = {},
                     onNext = {},
+                    onQueue = {},
                 )
             }
         }

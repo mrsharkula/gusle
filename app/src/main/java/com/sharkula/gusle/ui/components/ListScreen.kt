@@ -5,13 +5,17 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumnItemScope
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumnScope
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumnState
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.ButtonColors
@@ -27,15 +31,15 @@ import androidx.wear.compose.material3.lazy.transformedHeight
 /**
  * A screen that is one scrolling list: a [title] header, items that shrink toward the round
  * edges, and an optional [edgeButton] hugging the bottom. [content] adds the items and gets
- * the spec to pass to each [ListButton].
+ * the spec to pass to each [ListButton]. The header is the list's first item.
  */
 @Composable
 fun ListScreen(
     title: String,
+    listState: TransformingLazyColumnState = rememberTransformingLazyColumnState(),
     edgeButton: (@Composable BoxScope.() -> Unit)? = null,
     content: TransformingLazyColumnScope.(TransformationSpec) -> Unit,
 ) {
-    val listState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
     val list: @Composable BoxScope.(PaddingValues) -> Unit = { contentPadding ->
         TransformingLazyColumn(state = listState, contentPadding = contentPadding) {
@@ -64,7 +68,8 @@ private val TrailingGap = 10.dp
 /**
  * A full-width row in a [ListScreen] that narrows toward the round edges like every other row,
  * given the [transformationSpec] the list hands its content. [trailing] goes at the row's end,
- * centered on its height, e.g. the playing song's equalizer.
+ * centered on its height, e.g. the playing song's equalizer. It's [minHeight] tall, or taller when
+ * a large font needs it.
  */
 @Composable
 fun TransformingLazyColumnItemScope.ListButton(
@@ -77,13 +82,15 @@ fun TransformingLazyColumnItemScope.ListButton(
     trailing: (@Composable () -> Unit)? = null,
     enabled: Boolean = true,
     colors: ButtonColors = ButtonDefaults.buttonColors(),
+    minHeight: Dp = ButtonDefaults.Height,
 ) {
     // Button has no slot at the end. Its single-slot form takes the icon and labels laid out as
     // Button lays them out itself, with the same padding and type, and then [trailing]. Every row
     // uses it, so one that gains or loses [trailing] isn't made anew.
     Button(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
+        // Inside the transformed height, so the row still shrinks toward the edges.
+        modifier = modifier.fillMaxWidth().transformedHeight(this, transformationSpec).heightIn(min = minHeight),
         enabled = enabled,
         colors = colors,
         transformation = SurfaceTransformation(transformationSpec),
@@ -102,3 +109,12 @@ fun TransformingLazyColumnItemScope.ListButton(
         }
     }
 }
+
+/**
+ * Shrinks and fades an item that has no surface of its own toward the round edges while the
+ * list scrolls, the way list rows do.
+ */
+fun Modifier.edgeTransformation(item: TransformingLazyColumnItemScope, spec: TransformationSpec) =
+    transformedHeight(item, spec).graphicsLayer {
+        with(item) { with(spec) { applyContainerTransformation(scrollProgress) } }
+    }

@@ -27,6 +27,7 @@ import com.sharkula.gusle.ui.nowplaying.NowPlayingScreen
 import com.sharkula.gusle.ui.playback.playFrom
 import com.sharkula.gusle.ui.playback.rememberPlayerConnection
 import com.sharkula.gusle.ui.playback.shuffleAll
+import com.sharkula.gusle.ui.queue.QueueScreen
 import com.sharkula.gusle.ui.songs.AllSongsScreen
 import com.sharkula.gusle.ui.theme.GusleTheme
 import kotlinx.serialization.Serializable
@@ -42,6 +43,9 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object NowPlaying : Screen
+
+    @Serializable
+    data object Queue : Screen
 }
 
 /**
@@ -165,7 +169,13 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                 }
             }
             entry<Screen.NowPlaying>(metadata = slidesIn(Screen.NowPlaying)) {
-                NowPlayingScreen(player, songs.byId)
+                NowPlayingScreen(player, songs.byId, onQueue = { go(Screen.Queue) })
+            }
+            entry<Screen.Queue>(metadata = slidesIn(Screen.Queue)) {
+                PlayingSongTheme(songs) { _, _ ->
+                    // Its song is Now playing's: tapping it goes back there, also when tapped twice.
+                    QueueScreen(player, songs.byId, onPlayingSong = { go(Screen.NowPlaying) })
+                }
             }
         },
     )

@@ -3,6 +3,7 @@ package com.sharkula.gusle.playback
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
+import kotlin.random.Random
 
 /**
  * The timeline's windows (the player's songs) in the order they play: as they are (A–Z), or the
@@ -27,3 +28,7 @@ fun nextPlayable(playOrder: List<Int>, from: Int, backwards: Boolean, isPlayable
     val ahead = if (backwards) playOrder.subList(0, at).asReversed() else playOrder.subList(at + 1, playOrder.size)
     return ahead.firstOrNull(isPlayable)
 }
+
+/** A shuffled order of [count] songs that starts with the one at [first]: the rest follow at random. */
+fun shuffledFrom(first: Int, count: Int, random: Random): IntArray =
+    intArrayOf(first) + (0 until count).filter { it != first }.shuffled(random)

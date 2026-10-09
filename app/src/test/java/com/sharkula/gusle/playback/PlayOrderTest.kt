@@ -1,5 +1,6 @@
 package com.sharkula.gusle.playback
 
+import kotlin.random.Random
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -39,5 +40,13 @@ class PlayOrderTest {
     fun stopsWhenTheSongIsntInTheOrder() {
         assertNull(nextPlayable(shuffled, from = 7, backwards = false) { true })
         assertNull(nextPlayable(emptyList(), from = 0, backwards = true) { true })
+    }
+
+    @Test
+    fun shufflesTheRestAfterTheFirstSong() {
+        val order = shuffledFrom(first = 3, count = 6, Random(1)).toList()
+        assertEquals(3, order.first())
+        assertEquals(listOf(0, 1, 2, 3, 4, 5), order.sorted())
+        assertEquals(listOf(0), shuffledFrom(first = 0, count = 1, Random(1)).toList())
     }
 }

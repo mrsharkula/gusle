@@ -8,22 +8,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
-import androidx.wear.compose.foundation.lazy.TransformingLazyColumnItemScope
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.EdgeButtonSize
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
-import androidx.wear.compose.material3.lazy.TransformationSpec
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
-import androidx.wear.compose.material3.lazy.transformedHeight
 
 /**
  * A screen that says what's wrong and offers the fix: an [icon] in a circle, a short [title],
@@ -94,12 +90,3 @@ fun MessageScreen(
         }
     }
 }
-
-/**
- * Shrinks and fades an item that has no surface of its own toward the round edges while the
- * list scrolls, the way list rows do.
- */
-private fun Modifier.edgeTransformation(item: TransformingLazyColumnItemScope, spec: TransformationSpec) =
-    transformedHeight(item, spec).graphicsLayer {
-        with(item) { with(spec) { applyContainerTransformation(scrollProgress) } }
-    }

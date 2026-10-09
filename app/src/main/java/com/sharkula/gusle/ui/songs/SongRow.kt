@@ -7,6 +7,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumnItemScope
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.Text
@@ -32,13 +33,15 @@ fun TransformingLazyColumnItemScope.SongRow(
     noCover: Painter,
     transformationSpec: TransformationSpec,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    minHeight: Dp = ButtonDefaults.Height,
 ) {
     // Accessibility services say what the equalizer shows.
     val state = isPlaying?.let { stringResource(if (it) R.string.playing else R.string.paused) }
     ListButton(
         onClick = onClick,
         transformationSpec = transformationSpec,
-        modifier = if (state != null) Modifier.semantics { stateDescription = state } else Modifier,
+        modifier = if (state != null) modifier.semantics { stateDescription = state } else modifier,
         colors = if (isPlaying != null) {
             ButtonDefaults.filledVariantButtonColors()
         } else {
@@ -56,5 +59,30 @@ fun TransformingLazyColumnItemScope.SongRow(
         } else {
             null
         },
+        minHeight = minHeight,
     )
+}
+
+/** How long the song is, e.g. 3:31; null rather than "0:00" when MediaStore doesn't know it. */
+val Song.length: String? get() = if (durationMs > 0) formatLength(durationMs) else null
+
+/** 3:31, or 1:02:05 from an hour on. Built by hand: it runs for every row that scrolls in. */
+private fun formatLength(ms: Long): String {
+    val seconds = ms / 1000
+    val hours = seconds / 3600
+    return buildString {
+        if (hours > 0) {
+            append(hours).append(':')
+            appendTwoDigits(seconds / 60 % 60)
+        } else {
+            append(seconds / 60)
+        }
+        append(':')
+        appendTwoDigits(seconds % 60)
+    }
+}
+
+private fun StringBuilder.appendTwoDigits(value: Long) {
+    if (value < 10) append('0')
+    append(value)
 }
