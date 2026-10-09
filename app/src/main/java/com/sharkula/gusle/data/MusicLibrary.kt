@@ -54,10 +54,6 @@ class MusicLibrary(context: Context) {
     private val _songs = MutableStateFlow<Songs>(Songs.Loading)
     val songs: StateFlow<Songs> = _songs.asStateFlow()
 
-    private val _scanning = MutableStateFlow(false)
-    /** True while the songs are being read. */
-    val scanning: StateFlow<Boolean> = _scanning.asStateFlow()
-
     /**
      * Reads the songs again, e.g. whenever Gusle comes back to the screen. Asked during a read,
      * it reads once more afterwards, so nothing that changed in the meantime is missed. Returns
@@ -70,22 +66,17 @@ class MusicLibrary(context: Context) {
             return ongoing
         }
         return scope.launch {
-            _scanning.value = true
-            try {
-                do {
-                    readAgain = false
-                    val songs = withContext(Dispatchers.IO) { readSongs() }
-                    when {
-                        // An unchanged list equals the current one, so nothing redraws.
-                        songs != null -> _songs.value = songs
-                        // A failed read keeps the songs from the last good one, if any; the next
-                        // refresh tries again.
-                        _songs.value !is Songs.Loaded -> _songs.value = Songs.Failed
-                    }
-                } while (readAgain)
-            } finally {
-                _scanning.value = false
-            }
+            do {
+                readAgain = false
+                val songs = withContext(Dispatchers.IO) { readSongs() }
+                when {
+                    // An unchanged list equals the current one, so nothing redraws.
+                    songs != null -> _songs.value = songs
+                    // A failed read keeps the songs from the last good one, if any; the next
+                    // refresh tries again.
+                    _songs.value !is Songs.Loaded -> _songs.value = Songs.Failed
+                }
+            } while (readAgain)
         }.also { read = it }
     }
 

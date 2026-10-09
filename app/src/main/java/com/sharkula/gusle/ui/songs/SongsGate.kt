@@ -1,17 +1,8 @@
 package com.sharkula.gusle.ui.songs
 
-import androidx.annotation.StringRes
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
@@ -20,7 +11,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.wear.compose.foundation.LocalReduceMotion
 import androidx.wear.compose.material3.Icon
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.sharkula.gusle.R
@@ -28,8 +18,6 @@ import com.sharkula.gusle.data.MusicLibrary
 import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.ui.components.MessageScreen
 import com.sharkula.gusle.ui.theme.GusleTheme
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /**
  * Shows [content] with the songs on the watch, or "No songs yet" if there are none. Only shown
@@ -48,64 +36,50 @@ fun SongsGate(library: MusicLibrary, content: @Composable (songs: Songs.Loaded) 
         // Reading takes milliseconds, too short for anything but the black screen. No access
         // doesn't last either: access is on by now, and the refresh above reads again.
         Songs.Loading, Songs.NoAccess -> Unit
-        Songs.Failed -> RescanScreen(R.string.read_failed_title, R.string.read_failed_text, library)
-        is Songs.Loaded ->
-            if (state.list.isEmpty()) {
-                RescanScreen(R.string.no_songs_title, R.string.no_songs_text, library)
-            } else {
-                content(state)
-            }
+        is Songs.Loaded if state.list.isNotEmpty() -> content(state)
+        // One screen for both, so a rescan that turns one into the other goes on turning.
+        Songs.Failed, is Songs.Loaded -> RescanScreen(failed = state == Songs.Failed, library)
     }
 }
 
-/** Says why there are no songs to show, with Rescan in the edge button. */
+/**
+ * Says why there are no songs to show: there are none, or reading them [failed]. Rescan is in the
+ * edge button.
+ */
 @Composable
-private fun RescanScreen(@StringRes title: Int, @StringRes text: Int, library: MusicLibrary) {
-    // Collected here rather than in the gate, so a read doesn't recompose the rest of the app.
-    val scanning by library.scanning.collectAsStateWithLifecycle()
-    RescanScreen(stringResource(title), stringResource(text), scanning, onRescan = library::refresh)
+private fun RescanScreen(failed: Boolean, library: MusicLibrary) {
+    val rescan = rememberRescanState(library)
+    RescanScreen(
+        stringResource(if (failed) R.string.read_failed_title else R.string.no_songs_title),
+        stringResource(if (failed) R.string.read_failed_text else R.string.no_songs_text),
+        scanning = rescan.busy,
+        iconRotation = { rescan.rotation },
+        onRescan = rescan::rescan,
+    )
 }
 
-private const val TurnMillis = 1100
-
 @Composable
-private fun RescanScreen(title: String, text: String, scanning: Boolean, onRescan: () -> Unit) {
-    // From the tap until the rescan is done, but at least one turn of the arrow: a rescan usually
-    // takes milliseconds and would show nothing. The label says so too, for Reduce motion.
-    var busy by remember { mutableStateOf(false) }
-    val rotation = remember { Animatable(0f) }
-    val stillScanning by rememberUpdatedState(scanning)
-    val reduceMotion = LocalReduceMotion.current
-    val scope = rememberCoroutineScope()
-
+private fun RescanScreen(
+    title: String,
+    text: String,
+    /** From the tap until the rescan is done; see [RescanState]. */
+    scanning: Boolean,
+    /** The refresh icon's angle in degrees, read only while drawing. */
+    iconRotation: () -> Float,
+    onRescan: () -> Unit,
+) {
     MessageScreen(
         icon = R.drawable.ic_music_note,
         title = title,
         text = text,
-        action = stringResource(if (busy) R.string.scanning else R.string.rescan),
-        onAction = {
-            if (!busy) {
-                busy = true
-                onRescan()
-                scope.launch {
-                    do {
-                        if (reduceMotion) {
-                            delay(TurnMillis.toLong())
-                        } else {
-                            rotation.snapTo(0f)
-                            rotation.animateTo(360f, tween(TurnMillis, easing = LinearEasing))
-                        }
-                    } while (stillScanning)
-                    rotation.snapTo(0f)
-                    busy = false
-                }
-            }
-        },
+        // Said in words too, for when the arrow may not turn.
+        action = stringResource(if (scanning) R.string.scanning else R.string.rescan),
+        onAction = onRescan,
         actionIcon = {
             Icon(
                 painterResource(R.drawable.ic_refresh),
                 contentDescription = null,
-                modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = rotation.value },
+                modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = iconRotation() },
             )
         },
     )
@@ -119,6 +93,7 @@ private fun NoSongsScreenPreview() {
             title = stringResource(R.string.no_songs_title),
             text = stringResource(R.string.no_songs_text),
             scanning = false,
+            iconRotation = { 0f },
             onRescan = {},
         )
     }

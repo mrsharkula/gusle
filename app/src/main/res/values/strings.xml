@@ -37,8 +37,17 @@
     <string name="cant_play_song">Can\'t play this song</string>
     <string name="cant_play_titled">Can\'t play “%1$s”</string>
     <string name="cant_play_now">Can\'t play right now</string>
+    <string name="rescan_music">Rescan music</string>
+    <string name="rescanning">Scanning…</string>
+    <string name="about">About</string>
+    <string name="version">Version %1$s</string>
+    <string name="about_text">Plays the music stored on your watch.</string>
     <plurals name="song_count">
         <item quantity="one">%d song</item>
         <item quantity="other">%d songs</item>
+    </plurals>
+    <plurals name="songs_found">
+        <item quantity="one">%d song found</item>
+        <item quantity="other">%d songs found</item>
     </plurals>
 </resources>

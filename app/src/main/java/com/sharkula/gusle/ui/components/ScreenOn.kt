@@ -7,8 +7,10 @@ import android.content.IntentFilter
 import android.os.PowerManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.platform.LocalContext
@@ -70,9 +72,17 @@ fun rememberScreenShown(): State<Boolean> {
  * stands still in its end state.
  */
 @Composable
-fun rememberMayAnimate(shown: State<Boolean> = rememberScreenShown()): Boolean {
-    val animationsOff by rememberAnimationsOff()
-    return shown.value && !LocalReduceMotion.current && !animationsOff
+fun rememberMayAnimate(shown: State<Boolean> = rememberScreenShown()): Boolean = rememberMayAnimateState(shown).value
+
+/**
+ * [rememberMayAnimate] as a state, for code that looks only now and then, e.g. as an animation
+ * starts: read there, a change doesn't compose anything again.
+ */
+@Composable
+fun rememberMayAnimateState(shown: State<Boolean> = rememberScreenShown()): State<Boolean> {
+    val reduceMotion = rememberUpdatedState(LocalReduceMotion.current)
+    val animationsOff = rememberAnimationsOff()
+    return remember(shown) { derivedStateOf { shown.value && !reduceMotion.value && !animationsOff.value } }
 }
 
 /**

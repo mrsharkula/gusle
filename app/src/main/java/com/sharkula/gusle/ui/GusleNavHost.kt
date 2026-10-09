@@ -28,6 +28,8 @@ import com.sharkula.gusle.ui.playback.playFrom
 import com.sharkula.gusle.ui.playback.rememberPlayerConnection
 import com.sharkula.gusle.ui.playback.shuffleAll
 import com.sharkula.gusle.ui.queue.QueueScreen
+import com.sharkula.gusle.ui.settings.AboutScreen
+import com.sharkula.gusle.ui.settings.SettingsScreen
 import com.sharkula.gusle.ui.songs.AllSongsScreen
 import com.sharkula.gusle.ui.theme.GusleTheme
 import kotlinx.serialization.Serializable
@@ -46,6 +48,12 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object Queue : Screen
+
+    @Serializable
+    data object Settings : Screen
+
+    @Serializable
+    data object About : Screen
 }
 
 /**
@@ -151,7 +159,7 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                         // It goes on as it is.
                         onPlaying = { go(Screen.NowPlaying) },
                         onAllSongs = { go(Screen.AllSongs) },
-                        onSettings = {},
+                        onSettings = { go(Screen.Settings) },
                     )
                 }
             }
@@ -177,12 +185,23 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                     QueueScreen(player, songs.byId, onPlayingSong = { go(Screen.NowPlaying) })
                 }
             }
+            // In the playing song's colors too, so opening them from Home doesn't change the colors.
+            entry<Screen.Settings>(metadata = slidesIn(Screen.Settings)) {
+                PlayingSongTheme(songs) { _, _ ->
+                    SettingsScreen(songCount = songs.list.size, onAbout = { go(Screen.About) })
+                }
+            }
+            entry<Screen.About>(metadata = slidesIn(Screen.About)) {
+                PlayingSongTheme(songs) { _, _ ->
+                    AboutScreen()
+                }
+            }
         },
     )
 }
 
 /**
- * A screen that shows the player's song, in its cover's colors, without connecting to the player.
+ * A screen in the colors of the player's song's cover, without connecting to the player.
  * [content] gets the song, playing or paused, or null when there's none, or it's no longer among
  * the [songs] (deleted while playing). Each such screen follows the player itself, so a change
  * there composes just that screen again, not the navigation around it.
