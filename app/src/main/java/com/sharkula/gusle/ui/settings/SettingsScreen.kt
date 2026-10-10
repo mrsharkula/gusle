@@ -9,6 +9,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.MaterialTheme
@@ -23,12 +24,27 @@ import com.sharkula.gusle.ui.songs.RescanState
 import com.sharkula.gusle.ui.songs.rememberRescanState
 import com.sharkula.gusle.ui.theme.GusleTheme
 
-/** Rescan music, with how many songs there are, and About, with Gusle's version; opened from Home. */
+/**
+ * Stop playing, while there's a song to stop; Rescan music, with how many songs there are; and
+ * About, with Gusle's version. Opened from Home.
+ */
 @Composable
-fun SettingsScreen(songCount: Int, onAbout: () -> Unit) {
+fun SettingsScreen(
+    songCount: Int,
+    /** Whether the player has a song, playing or paused, or one it comes back to. */
+    hasSong: Boolean,
+    /** That song's title; null when it's no longer among the songs (deleted while playing). */
+    songTitle: String?,
+    /** Stop playing was tapped: stop the song, forget it, and close Gusle. */
+    onStopPlaying: () -> Unit,
+    onAbout: () -> Unit,
+) {
     val rescan = rememberRescanState(LocalContext.current.musicLibrary)
     SettingsScreen(
         songCount = songCount,
+        hasSong = hasSong,
+        songTitle = songTitle,
+        onStopPlaying = onStopPlaying,
         scanning = rescan.busy,
         iconRotation = { rescan.rotation },
         version = rememberVersionName(),
@@ -41,6 +57,9 @@ fun SettingsScreen(songCount: Int, onAbout: () -> Unit) {
 private fun SettingsScreen(
     /** The songs on the watch, as last read. */
     songCount: Int,
+    hasSong: Boolean,
+    songTitle: String?,
+    onStopPlaying: () -> Unit,
     /** From the Rescan tap until it's done; see [RescanState]. */
     scanning: Boolean,
     /** The refresh icon's angle in degrees, read only while drawing. */
@@ -53,6 +72,27 @@ private fun SettingsScreen(
     val rowColors = ButtonDefaults.filledTonalButtonColors()
 
     ListScreen(title = stringResource(R.string.settings)) { transformationSpec ->
+        // The way out of a song Gusle would otherwise come back to, and whose colors it would keep.
+        if (hasSong) {
+            item(key = "stop") {
+                ListButton(
+                    onClick = onStopPlaying,
+                    transformationSpec = transformationSpec,
+                    colors = rowColors,
+                    icon = {
+                        IconCircle(
+                            icon = R.drawable.ic_stop,
+                            background = colors.secondaryContainer,
+                            tint = colors.onSecondaryContainer,
+                        )
+                    },
+                    label = { Text(stringResource(R.string.stop_playing)) },
+                    secondaryLabel = songTitle?.let { title ->
+                        { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    },
+                )
+            }
+        }
         item(key = "rescan") {
             ListButton(
                 onClick = onRescan,
@@ -107,6 +147,9 @@ private fun SettingsScreenPreview() {
     GusleTheme {
         SettingsScreen(
             songCount = 51,
+            hasSong = false,
+            songTitle = null,
+            onStopPlaying = {},
             scanning = false,
             iconRotation = { 0f },
             version = "1.0",
@@ -123,7 +166,29 @@ private fun SettingsScreenScanningPreview() {
     GusleTheme {
         SettingsScreen(
             songCount = 51,
+            hasSong = false,
+            songTitle = null,
+            onStopPlaying = {},
             scanning = true,
+            iconRotation = { 0f },
+            version = "1.0",
+            onRescan = {},
+            onAbout = {},
+        )
+    }
+}
+
+/** With a song Gusle would come back to. */
+@Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true)
+@Composable
+private fun SettingsScreenPlayingPreview() {
+    GusleTheme {
+        SettingsScreen(
+            songCount = 51,
+            hasSong = true,
+            songTitle = "River at Dawn",
+            onStopPlaying = {},
+            scanning = false,
             iconRotation = { 0f },
             version = "1.0",
             onRescan = {},

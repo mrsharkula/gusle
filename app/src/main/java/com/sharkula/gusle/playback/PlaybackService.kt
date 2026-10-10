@@ -1,6 +1,7 @@
 package com.sharkula.gusle.playback
 
 import android.app.PendingIntent
+import android.os.Bundle
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -13,6 +14,9 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSession.ConnectionResult
 import androidx.media3.session.MediaSession.MediaItemsWithStartPosition
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import com.sharkula.gusle.GusleApp
@@ -34,6 +38,12 @@ import kotlinx.coroutines.launch
 
 /** While playing, where it is is saved this often, so a crash or a dead battery loses little. */
 private const val SaveEveryMs = 10_000L
+
+/**
+ * Asks the service to stop and forget what it played, as if nothing had: Stop playing in Settings.
+ * Only Gusle's screens may send it.
+ */
+val StopAndForget = SessionCommand("com.sharkula.gusle.STOP_AND_FORGET", Bundle.EMPTY)
 
 /**
  * Plays the songs, also in the background, and shows them in the watch's media controls. The
@@ -95,7 +105,7 @@ class PlaybackService : MediaSessionService() {
             .build()
         val player: Player = SessionPlayer(exoPlayer, unplayable)
         player.addListener(followPlayer)
-        val lookup = SongLookup(musicLibrary, lastPlayed, packageName, scope)
+        val lookup = SongLookup(musicLibrary, lastPlayed, packageName, scope, stopAndForget = { stopAndForget(player) })
         session = MediaSession.Builder(this, player)
             // Tapping the watch's media controls opens Gusle on Now playing, or brings it back there
             // if it's open.
@@ -142,6 +152,19 @@ class PlaybackService : MediaSessionService() {
         lastPlayed.save(queue)
     }
 
+    /**
+     * Stops playing and forgets the queue, as if nothing had played, and stops the service, which
+     * takes Gusle out of the watch's media controls once the screens let go of it.
+     */
+    @OptIn(UnstableApi::class) // pauseAllPlayersAndStopSelf
+    private fun stopAndForget(player: Player) {
+        // Forgotten first: told the player is empty, the screens would show the saved song instead.
+        lastPlayed.forget()
+        player.stop()
+        player.clearMediaItems()
+        pauseAllPlayersAndStopSelf()
+    }
+
     private fun saveWhilePlaying(player: Player) {
         savingWhilePlaying?.cancel()
         savingWhilePlaying = if (player.isPlaying) {
@@ -184,29 +207,49 @@ private fun ExoPlayer.restore(queue: RestoredQueue) {
 
 /**
  * Lets in Gusle's screens and the system, and turns the song IDs they send into items the player
- * can play. It also looks up the queue the player had last. Callbacks run on the main thread, as
- * the library needs.
+ * can play. It also looks up the queue the player had last, and runs [stopAndForget] when Gusle's
+ * screens send [StopAndForget]. Callbacks run on the main thread, as the library needs.
  */
 private class SongLookup(
     private val library: MusicLibrary,
     private val lastPlayed: LastPlayed,
     private val gusle: String,
     private val scope: CoroutineScope,
+    private val stopAndForget: () -> Unit,
 ) : MediaSession.Callback {
     @OptIn(UnstableApi::class) // isTrusted, AcceptedResultBuilder
-    override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): ConnectionResult =
+    override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): ConnectionResult {
+        val isGusle = controller.packageName == gusle
         // Trusted: the system, e.g. the watch's media controls. Anyone else could find out which
         // songs are on the watch by asking to play IDs, without being allowed to read music.
-        if (controller.packageName == gusle || controller.isTrusted) {
-            ConnectionResult.AcceptedResultBuilder(session, controller)
-                // Songs play once through; nothing may turn repeat on.
-                .setAvailablePlayerCommands(
-                    ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon().remove(Player.COMMAND_SET_REPEAT_MODE).build(),
-                )
-                .build()
-        } else {
-            ConnectionResult.reject()
+        if (!isGusle && !controller.isTrusted) return ConnectionResult.reject()
+        return ConnectionResult.AcceptedResultBuilder(session, controller)
+            // Songs play once through; nothing may turn repeat on.
+            .setAvailablePlayerCommands(
+                ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon().remove(Player.COMMAND_SET_REPEAT_MODE).build(),
+            )
+            .apply {
+                if (isGusle) {
+                    setAvailableSessionCommands(
+                        ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon().add(StopAndForget).build(),
+                    )
+                }
+            }
+            .build()
+    }
+
+    override fun onCustomCommand(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo,
+        customCommand: SessionCommand,
+        args: Bundle,
+    ): ListenableFuture<SessionResult> {
+        if (customCommand.customAction != StopAndForget.customAction) {
+            return super.onCustomCommand(session, controller, customCommand, args)
         }
+        stopAndForget()
+        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+    }
 
     override fun onAddMediaItems(
         mediaSession: MediaSession,

@@ -2,6 +2,7 @@ package com.sharkula.gusle.ui.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -14,12 +15,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionResult
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
+import com.sharkula.gusle.GusleApp
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.playback.PlaybackService
+import com.sharkula.gusle.playback.StopAndForget
 import com.sharkula.gusle.playback.toMediaItemRequest
+import java.util.concurrent.CancellationException
 import java.util.concurrent.ExecutionException
 
 private const val Tag = "Player"
@@ -47,7 +52,39 @@ class PlayerConnection(private val context: Context) {
     fun isConnected(player: Player): Boolean = connected.value === player
 
     /** Runs [action] with the player, connecting first if needed. */
-    fun withPlayer(action: Player.() -> Unit) {
+    fun withPlayer(action: Player.() -> Unit) = withController(action)
+
+    /**
+     * Stops and forgets what played, as if nothing had: has the playback service do it (see
+     * [StopAndForget]), connecting first if needed, or, when its player has no song, just forgets
+     * the saved one. [then] runs once it's done.
+     */
+    fun stopAndForget(then: () -> Unit) {
+        if ((context.applicationContext as GusleApp).playing.forgetIfOnlySaved()) {
+            then()
+            return
+        }
+        withController { sendStopAndForget(then) }
+    }
+
+    private fun MediaController.sendStopAndForget(then: () -> Unit) {
+        val result = sendCustomCommand(StopAndForget, Bundle.EMPTY)
+        result.addListener(
+            {
+                val done = try {
+                    result.get().resultCode == SessionResult.RESULT_SUCCESS
+                } catch (e: ExecutionException) {
+                    false
+                } catch (e: CancellationException) {
+                    false
+                }
+                if (done) then() else Log.w(Tag, "The playback service didn't stop")
+            },
+            MoreExecutors.directExecutor(),
+        )
+    }
+
+    private fun withController(action: MediaController.() -> Unit) {
         val future = connection()
         // The future completes on the main thread, so this runs right then, or right away if it
         // already has. When Gusle left the screen first, the future is cancelled and the tap

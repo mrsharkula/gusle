@@ -19,7 +19,7 @@ data class PlayingSong(val songId: Long, val isPlaying: Boolean)
  * The song in the playback service's player, for the screens that show it without connecting to
  * the service: connecting would start it. Without one, it's the song the player had last
  * ([LastPlayed]), paused: the service comes back to it when it starts. The app keeps one; only the
- * service changes it.
+ * service changes it, apart from Stop playing forgetting a saved song ([forgetIfOnlySaved]).
  */
 class PlayingSongHolder(private val library: MusicLibrary, private val lastPlayed: LastPlayed) {
     private val playing = MutableStateFlow<PlayingSong?>(null)
@@ -50,6 +50,19 @@ class PlayingSongHolder(private val library: MusicLibrary, private val lastPlaye
             PlayingSong(songId, isPlaying = !Util.shouldShowPlayButton(player))
         }
         show()
+    }
+
+    /**
+     * Forgets the song saved to come back to, for Stop playing, when the service's player has no
+     * song: then there's no player to stop, and the service isn't started just to empty it. A
+     * service starting meanwhile finds nothing to come back to. False, forgetting nothing, when the
+     * player has a song: the service has to stop it.
+     */
+    fun forgetIfOnlySaved(): Boolean {
+        if (fromPlayer != null) return false
+        lastPlayed.forget()
+        show()
+        return true
     }
 
     /** The service stopped; it has saved its song. */

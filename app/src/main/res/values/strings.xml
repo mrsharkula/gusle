@@ -37,6 +37,7 @@
     <string name="cant_play_song">Can\'t play this song</string>
     <string name="cant_play_titled">Can\'t play “%1$s”</string>
     <string name="cant_play_now">Can\'t play right now</string>
+    <string name="stop_playing">Stop playing</string>
     <string name="rescan_music">Rescan music</string>
     <string name="rescanning">Scanning…</string>
     <string name="about">About</string>

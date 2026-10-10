@@ -1,5 +1,6 @@
 package com.sharkula.gusle.ui
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -187,8 +188,19 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
             }
             // In the playing song's colors too, so opening them from Home doesn't change the colors.
             entry<Screen.Settings>(metadata = slidesIn(Screen.Settings)) {
-                PlayingSongTheme(songs) { _, _ ->
-                    SettingsScreen(songCount = songs.list.size, onAbout = { go(Screen.About) })
+                val activity = LocalActivity.current
+                // Also a song deleted while playing, which PlayingSongTheme leaves out: there's still
+                // one to stop then.
+                val playingSong by LocalContext.current.playingSong.collectAsStateWithLifecycle()
+                PlayingSongTheme(songs) { playing, _ ->
+                    SettingsScreen(
+                        songCount = songs.list.size,
+                        hasSong = playingSong != null,
+                        songTitle = playing?.title,
+                        // Gusle closes once the song's gone; it opens next time with nothing playing.
+                        onStopPlaying = { player.stopAndForget { activity?.finish() } },
+                        onAbout = { go(Screen.About) },
+                    )
                 }
             }
             entry<Screen.About>(metadata = slidesIn(Screen.About)) {
