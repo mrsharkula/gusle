@@ -8,7 +8,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -23,15 +22,10 @@ import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.size.Scale
 import coil3.toBitmap
-import com.materialkolor.dynamiccolor.DynamicColor
-import com.materialkolor.dynamiccolor.MaterialDynamicColors
-import com.materialkolor.hct.Hct
-import com.materialkolor.palettes.TonalPalette
 import com.materialkolor.quantize.QuantizerCelebi
-import com.materialkolor.scheme.SchemeTonalSpot
 import com.materialkolor.score.Score
 import com.sharkula.gusle.coverColors
-import com.sharkula.gusle.ui.theme.DefaultColorScheme
+import com.sharkula.gusle.ui.theme.seedColorScheme
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -61,35 +55,46 @@ private val RetryWaitsMs = longArrayOf(2_000, 8_000)
 
 /**
  * A song's cover as a screen shows it, and its colors. [picture] is null for a song without a
- * cover, or whose cover couldn't be read.
+ * cover, or whose cover couldn't be read. [colors] is null when the song has none of its own: it's
+ * shown in the app theme's ([com.sharkula.gusle.ui.theme.LocalAppTheme]).
  */
-class CoverArt(val cover: SongCover?, val picture: ImageBitmap?, val colors: ColorScheme)
+class CoverArt(val cover: SongCover?, val picture: ImageBitmap?, val colors: ColorScheme?)
+
+/**
+ * A cover's own colors, once worked out: null [scheme] for a song without a cover, or with one
+ * that has no real color in it, which is shown in the app theme's colors. The
+ * theme's colors aren't kept here, so a change of theme reaches every such song at once.
+ */
+class OwnColors(val scheme: ColorScheme?)
+
+/** The [OwnColors] of every song that has none. */
+private val NoOwnColors = OwnColors(null)
 
 /**
  * The colors for each song's cover: a Material 3 color scheme generated from the cover's main
- * color, or the sand [DefaultColorScheme] for a song without a cover, or with one that has no
- * real color in it. The last few dozen are kept, for every screen that shows the playing song's
- * colors.
+ * color, or none, for a song without a cover, or with one that has no real color in it. The last
+ * few dozen are kept, for every screen that shows the playing song's colors.
  */
 class CoverColors(private val context: Context) {
-    private val schemes = LruCache<SongCover, ColorScheme>(KeptSchemes)
+    private val schemes = LruCache<SongCover, OwnColors>(KeptSchemes)
     private val scope = MainScope()
 
     /**
      * The colors [show] is working out, so screens asking at the same time share the work. Only
      * used on the main thread.
      */
-    private val working = HashMap<SongCover, Deferred<ColorScheme?>>()
+    private val working = HashMap<SongCover, Deferred<OwnColors?>>()
 
     /** The playing song's cover, as [show] last heard of it. */
     private var playingCover: SongCover? = null
 
     /**
      * The playing song's colors, for the screens that show them without its cover (see [show]):
-     * its cover's once they're known, and until then those of the song before, sand at first. A
-     * screen that reads them is composed again when they change. Only used on the main thread.
+     * its cover's once they're known, and until then those of the song before. Null while they're
+     * the app theme's: at first, and for a song without colors of its own. A screen that reads them
+     * is composed again when they change. Only used on the main thread.
      */
-    var playingColors: ColorScheme by mutableStateOf(DefaultColorScheme)
+    var playingColors: ColorScheme? by mutableStateOf(null)
         private set
 
     /**
@@ -100,33 +105,34 @@ class CoverColors(private val context: Context) {
         private set
 
     /** [cover]'s colors if they're known already, so a screen can show them in its first frame. */
-    fun known(cover: SongCover?): ColorScheme? = if (cover == null) DefaultColorScheme else schemes[cover]
+    fun known(cover: SongCover): OwnColors? = schemes[cover]
 
     /**
      * Makes [playingColors] those of the playing song's [cover], once they're known. Screens asking
      * at the same time share the work, which goes on when they leave, so the colors are kept for
-     * the next one. A cover that couldn't be read is tried again a little later, in sand meanwhile.
+     * the next one. A cover that couldn't be read is tried again a little later, in the app theme's
+     * colors meanwhile.
      */
     suspend fun show(cover: SongCover?) {
         playingCover = cover
         var tries = 0
         while (true) {
-            val colors = if (cover == null) DefaultColorScheme else known(cover) ?: workOut(cover)
-            if (cover == playingCover) playingColors = colors ?: DefaultColorScheme
+            val colors = if (cover == null) NoOwnColors else known(cover) ?: workOut(cover)
+            if (cover == playingCover) playingColors = colors?.scheme
             if (colors != null || tries == RetryWaitsMs.size) return
             delay(RetryWaitsMs[tries++])
         }
     }
 
     /** [cover]'s colors, worked out once for everyone asking meanwhile; null when it couldn't be read. */
-    private suspend fun workOut(cover: SongCover): ColorScheme? {
+    private suspend fun workOut(cover: SongCover): OwnColors? {
         val work = working.getOrPut(cover) { scope.async { readColors(cover) } }
         work.invokeOnCompletion { working.remove(cover, work) }
         return work.await()
     }
 
     /** Reads a small copy of [cover] and works out its colors; null when it couldn't be read. */
-    private suspend fun readColors(cover: SongCover): ColorScheme? =
+    private suspend fun readColors(cover: SongCover): OwnColors? =
         // Only the colors are kept: a small copy in Coil's cache would push full-size covers out.
         when (val result = read(cover, ColorSampleSize, Scale.FIT, keep = false)) {
             is SuccessResult -> colorsOf(cover, result.image.toBitmap())
@@ -139,14 +145,14 @@ class CoverColors(private val context: Context) {
      */
     suspend fun art(cover: SongCover?, sizePx: Int): CoverArt {
         val art = if (cover == null) {
-            CoverArt(null, null, DefaultColorScheme)
+            CoverArt(null, null, null)
         } else {
             when (val result = read(cover, sizePx, Scale.FILL, keep = true)) {
                 is SuccessResult -> {
                     val picture = result.image.toBitmap()
-                    CoverArt(cover, picture.asImageBitmap(), known(cover) ?: colorsOf(cover, picture))
+                    CoverArt(cover, picture.asImageBitmap(), (known(cover) ?: colorsOf(cover, picture)).scheme)
                 }
-                is ErrorResult -> CoverArt(cover, null, noColors(cover, result) ?: DefaultColorScheme)
+                is ErrorResult -> CoverArt(cover, null, noColors(cover, result)?.scheme)
             }
         }
         lastArt = art
@@ -167,39 +173,43 @@ class CoverColors(private val context: Context) {
     }
 
     /** Works out [cover]'s colors from its [picture], off the main thread, and keeps them. */
-    private suspend fun colorsOf(cover: SongCover, picture: Bitmap): ColorScheme {
+    private suspend fun colorsOf(cover: SongCover, picture: Bitmap): OwnColors {
         val scheme = withContext(Dispatchers.Default) {
-            mainColor(pixelsOf(sample(picture)))?.let(::coverColorScheme)
-        } ?: DefaultColorScheme
+            mainColor(pixelsOf(sample(picture)))?.let(::seedColorScheme)
+        }
         // Another screen may have worked them out meanwhile. Every screen gets the same ones, so
         // none is composed again for colors that look the same.
         schemes[cover]?.let { return it }
-        schemes.put(cover, scheme)
-        return scheme
+        val colors = if (scheme == null) NoOwnColors else OwnColors(scheme)
+        schemes.put(cover, colors)
+        return colors
     }
 
     /**
-     * The colors for a cover that couldn't be read: sand, kept, when the song has no cover. Any
-     * other failure may pass, so it's null and the next time tries again.
+     * The colors for a cover that couldn't be read: none of its own, kept, when the song has no
+     * cover. Any other failure may pass, so it's null and the next time tries again.
      */
-    private fun noColors(cover: SongCover, result: ErrorResult): ColorScheme? {
+    private fun noColors(cover: SongCover, result: ErrorResult): OwnColors? {
         if (result.throwable !is NoCoverException) return null
-        schemes.put(cover, DefaultColorScheme)
-        return DefaultColorScheme
+        schemes.put(cover, NoOwnColors)
+        return NoOwnColors
     }
 }
 
 /**
  * The colors for the playing song's [cover], for a screen that shows them without the cover
  * itself: right away when they're known, otherwise those shown for the song before stay until
- * they're ready (sand at first). They jump rather than fade, since fading every role would
- * recompose the whole screen each frame.
+ * they're ready. Null for the app theme's ([com.sharkula.gusle.ui.theme.GusleTheme] fills them
+ * in): at first, and for a song without colors of its own. They jump rather than fade, since fading
+ * every role would recompose the whole screen each frame.
  */
 @Composable
-fun playingSongColors(cover: SongCover?): ColorScheme {
+fun playingSongColors(cover: SongCover?): ColorScheme? {
     val coverColors = LocalContext.current.coverColors
     LaunchedEffect(cover) { coverColors.show(cover) }
-    return coverColors.known(cover) ?: coverColors.playingColors
+    if (cover == null) return null
+    val known = coverColors.known(cover) ?: return coverColors.playingColors
+    return known.scheme
 }
 
 /** [picture], or a copy of it at most [ColorSampleSize] across. */
@@ -224,50 +234,3 @@ private fun pixelsOf(bitmap: Bitmap): IntArray =
 fun mainColor(pixels: IntArray): Int? =
     Score.score(QuantizerCelebi.quantize(pixels, CoverColorGroups), desired = 1, fallbackColorArgb = null)
         .firstOrNull()
-
-/** Wear's dim roles are their role's palette this many tones darker, as in the sand scheme (80 → 72). */
-private const val DimTones = 8
-
-/**
- * Material 3's dark "tonal spot" scheme around [seed] (the 2021 rules, the library's default), in
- * Wear's roles, on pure black. Material's schemes have no dim roles; see [DimTones].
- */
-fun coverColorScheme(seed: Int): ColorScheme {
-    val scheme = SchemeTonalSpot(Hct.fromInt(seed), isDark = true, contrastLevel = 0.0)
-    val roles = MaterialDynamicColors()
-    fun color(role: DynamicColor) = Color(role.getArgb(scheme))
-    fun dim(role: DynamicColor, palette: TonalPalette) =
-        Color(palette.tone((role.getHct(scheme).tone - DimTones).roundToInt()))
-    return ColorScheme(
-        primary = color(roles.primary()),
-        primaryDim = dim(roles.primary(), scheme.primaryPalette),
-        primaryContainer = color(roles.primaryContainer()),
-        onPrimary = color(roles.onPrimary()),
-        onPrimaryContainer = color(roles.onPrimaryContainer()),
-        secondary = color(roles.secondary()),
-        secondaryDim = dim(roles.secondary(), scheme.secondaryPalette),
-        secondaryContainer = color(roles.secondaryContainer()),
-        onSecondary = color(roles.onSecondary()),
-        onSecondaryContainer = color(roles.onSecondaryContainer()),
-        tertiary = color(roles.tertiary()),
-        tertiaryDim = dim(roles.tertiary(), scheme.tertiaryPalette),
-        tertiaryContainer = color(roles.tertiaryContainer()),
-        onTertiary = color(roles.onTertiary()),
-        onTertiaryContainer = color(roles.onTertiaryContainer()),
-        surfaceContainerLow = color(roles.surfaceContainerLow()),
-        surfaceContainer = color(roles.surfaceContainer()),
-        surfaceContainerHigh = color(roles.surfaceContainerHigh()),
-        onSurface = color(roles.onSurface()),
-        onSurfaceVariant = color(roles.onSurfaceVariant()),
-        outline = color(roles.outline()),
-        outlineVariant = color(roles.outlineVariant()),
-        // Unused pixels stay off.
-        background = Color.Black,
-        onBackground = color(roles.onBackground()),
-        error = color(roles.error()),
-        errorDim = dim(roles.error(), scheme.errorPalette),
-        errorContainer = color(roles.errorContainer()),
-        onError = color(roles.onError()),
-        onErrorContainer = color(roles.onErrorContainer()),
-    )
-}

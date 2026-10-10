@@ -19,10 +19,10 @@ import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.ui.components.IconCircle
 import com.sharkula.gusle.ui.components.ListButton
 import com.sharkula.gusle.ui.components.ListScreen
-import com.sharkula.gusle.ui.covers.coverColorScheme
 import com.sharkula.gusle.ui.covers.rememberRowNoCoverPainter
 import com.sharkula.gusle.ui.songs.SongRow
 import com.sharkula.gusle.ui.theme.GusleTheme
+import com.sharkula.gusle.ui.theme.seedColorScheme
 
 private data class Source(@DrawableRes val icon: Int, @StringRes val label: Int)
 
@@ -124,7 +124,7 @@ private fun HomeScreenPreview() {
 
 private val previewSong = Song(1, Uri.EMPTY, "River at Dawn", "Test Ensemble", 211_000, 0)
 
-/** In sand, as for a song without a cover. */
+/** In the app theme's colors, as for a song without a cover. */
 @Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true)
 @Composable
 private fun HomeScreenPlayingPreview() {
@@ -137,7 +137,7 @@ private fun HomeScreenPlayingPreview() {
 @Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true)
 @Composable
 private fun HomeScreenPlayingCoverPreview() {
-    GusleTheme(colorScheme = coverColorScheme(0xFF93291C.toInt())) {
+    GusleTheme(colorScheme = seedColorScheme(0xFF93291C.toInt())) {
         HomeScreen(songCount = 51, playing = previewSong, isPlaying = true, onPlaying = {}, onAllSongs = {}, onSettings = {})
     }
 }

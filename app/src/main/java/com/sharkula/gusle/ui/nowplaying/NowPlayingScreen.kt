@@ -138,11 +138,11 @@ import com.sharkula.gusle.ui.components.rememberScreenShown
 import com.sharkula.gusle.ui.covers.CoverArt
 import com.sharkula.gusle.ui.covers.NoCoverPainter
 import com.sharkula.gusle.ui.covers.SongCover
-import com.sharkula.gusle.ui.covers.coverColorScheme
 import com.sharkula.gusle.ui.playback.PlayerConnection
 import com.sharkula.gusle.ui.playback.rememberShownPlayer
-import com.sharkula.gusle.ui.theme.DefaultColorScheme
 import com.sharkula.gusle.ui.theme.GusleTheme
+import com.sharkula.gusle.ui.theme.LocalAppTheme
+import com.sharkula.gusle.ui.theme.seedColorScheme
 import com.sharkula.gusle.unplayableSongs
 import kotlin.math.PI
 import kotlin.math.abs
@@ -324,7 +324,7 @@ private fun NowPlaying(
     val haptics = LocalHapticFeedback.current
     val crownStepPx = with(LocalDensity.current) { CrownStep.toPx() }
     val crown = remember(crownStepPx) { CrownSteps(crownStepPx) }
-    GusleTheme(colorScheme = art?.colors ?: DefaultColorScheme) {
+    GusleTheme(colorScheme = art?.colors) {
         DesignScale {
             Box(
                 Modifier
@@ -602,19 +602,28 @@ private fun Modifier.fadeIntoBlack() =
         }
     }
 
-/** The design's darker sand between primaryContainer in the middle and black at the edge. */
-private val NoCoverGlowEdge = Color(0xFF2B2217)
+/**
+ * How bright the no-cover glow is, 70% of the way out, next to primaryContainer in the middle: the
+ * design's darker shade between it and black at the edge.
+ */
+private const val NoCoverGlowEdgeBrightness = 0.58f
 
 /**
- * A warm glow with a large faint music note, always in sand: that's a song without a cover's color,
- * also while the last song's colors are still up.
+ * A glow with a large faint music note, always in the app theme's colors: those are a song without
+ * a cover's, also while the last song's colors are still up.
  */
 @Composable
 private fun rememberNoCoverPainter(): Painter {
     val note = painterResource(R.drawable.ic_music_note)
-    return remember(note) {
-        val colors = DefaultColorScheme
-        val glow = Brush.radialGradient(0f to colors.primaryContainer, 0.7f to NoCoverGlowEdge, 1f to Color.Black)
+    val colors = LocalAppTheme.current.colors
+    return remember(note, colors) {
+        val middle = colors.primaryContainer
+        val edge = Color(
+            red = middle.red * NoCoverGlowEdgeBrightness,
+            green = middle.green * NoCoverGlowEdgeBrightness,
+            blue = middle.blue * NoCoverGlowEdgeBrightness,
+        )
+        val glow = Brush.radialGradient(0f to middle, 0.7f to edge, 1f to Color.Black)
         NoCoverPainter(note, glow, colors.primary.copy(alpha = 0.22f), noteSize = 104.dp)
     }
 }
@@ -894,7 +903,7 @@ private fun NowPlayingPreview() {
     NowPlayingPreview(
         title = "River at Dawn",
         artist = "Test Ensemble",
-        art = CoverArt(SongCover(Uri.EMPTY, 0), picture, coverColorScheme(0xFF93291C.toInt())),
+        art = CoverArt(SongCover(Uri.EMPTY, 0), picture, seedColorScheme(0xFF93291C.toInt())),
         isPlaying = true,
         shuffleOn = true,
     )
@@ -906,7 +915,7 @@ private fun NowPlayingNoCoverPreview() {
     NowPlayingPreview(
         title = "A Very Long Song Title That Runs Past the Edge",
         artist = "Test Trio",
-        art = CoverArt(null, null, DefaultColorScheme),
+        art = CoverArt(null, null, null),
         isPlaying = false,
         shuffleOn = false,
     )

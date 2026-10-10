@@ -11,7 +11,9 @@ import com.sharkula.gusle.ui.GusleNavHost
 import com.sharkula.gusle.ui.NowPlayingRequest
 import com.sharkula.gusle.ui.access.MusicAccessGate
 import com.sharkula.gusle.ui.songs.SongsGate
+import com.sharkula.gusle.ui.theme.AppTheme
 import com.sharkula.gusle.ui.theme.GusleTheme
+import kotlin.concurrent.thread
 
 /**
  * The manifest's alias of MainActivity that opens Now playing. It isn't exported, so only Gusle's
@@ -32,6 +34,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Not when the activity is created again, e.g. after a font size change: it was asked then.
         if (savedInstanceState == null) takeRequest(intent)
+        // Makes the app theme's colors off the main thread while the screen gets ready: the first
+        // scheme made takes a while, as its code loads. Here rather than as the app starts, which
+        // it also does for the playback service alone, with no screen to color.
+        thread(name = "AppTheme") { AppTheme.Default.colors }
         val library = musicLibrary
         setContent {
             GusleTheme {

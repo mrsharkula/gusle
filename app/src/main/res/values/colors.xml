@@ -1,5 +1,7 @@
 <resources>
-    <!-- Placeholder app icon: dark note on the default sand color. -->
-    <color name="ic_launcher_background">#F0C987</color>
-    <color name="ic_launcher_foreground">#3D2A00</color>
+    <!-- App icon: the gusle in walnut's colors (AppTheme.Walnut's primary, onPrimary and
+         primaryDim). It stays in walnut whatever the app theme. -->
+    <color name="ic_launcher_background">#FFB77D</color>
+    <color name="ic_launcher_foreground">#4D2600</color>
+    <color name="ic_launcher_skin">#E8A167</color>
 </resources>
