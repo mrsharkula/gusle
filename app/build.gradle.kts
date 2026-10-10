@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.baselineprofile)
 }
 
 // Release signing comes from keystore.properties (git-ignored, next to this project's root),
@@ -57,6 +58,17 @@ android {
                 "proguard-rules.pro"
             )
         }
+        // Copies of release for the baseline profile plugin (see :baselineprofile), which would
+        // otherwise make them itself with release's app ID: nonMinifiedRelease generates the
+        // profile, benchmarkRelease measures it. As an app of their own, they install next to the
+        // real Gusle and never replace or uninstall it, so they don't need the release key.
+        for (name in listOf("nonMinifiedRelease", "benchmarkRelease")) {
+            create(name) {
+                initWith(getByName("release"))
+                applicationIdSuffix = ".benchmark"
+                signingConfig = signingConfigs.getByName("debug")
+            }
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -100,6 +112,7 @@ dependencies {
     implementation(libs.media3.ui.compose)
     implementation(libs.profileinstaller)
     implementation(libs.material.color.utilities)
+    baselineProfile(project(":baselineprofile"))
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)
 }

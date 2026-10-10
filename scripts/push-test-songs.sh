@@ -4,9 +4,10 @@
 # Android indexes them as music on its own. Also adds a few songs that can't be played, which
 # Gusle must skip, and one notification sound, which it must not list.
 #
-# Usage: scripts/push-test-songs.sh [--remove] [emulator-serial]
-# --remove deletes the test songs again. Without a serial, the first running Wear OS emulator
-# is used. Never touches a real watch.
+# Usage: scripts/push-test-songs.sh [--many | --remove] [emulator-serial]
+# --many adds 40 more songs, so All songs and the Queue scroll for several screens, as the
+# baseline profile's journeys need. --remove deletes all the test songs again, those too.
+# Without a serial, the first running Wear OS emulator is used. Never touches a real watch.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -20,8 +21,20 @@ sdk_dir="${sdk_dir:-${ANDROID_HOME:-$HOME/Library/Android/sdk}}"
 adb="$sdk_dir/platform-tools/adb"
 [ -x "$adb" ] || fail "adb not found at $adb."
 
-remove=false
-if [ "${1:-}" = "--remove" ]; then remove=true; shift; fi
+usage="Usage: scripts/push-test-songs.sh [--many | --remove] [emulator-serial]"
+remove=false many=false serial=""
+for arg in "$@"; do
+    case "$arg" in
+        --remove) remove=true ;;
+        --many) many=true ;;
+        -*) fail "Unknown option $arg. $usage" ;;
+        *)
+            [ -z "$serial" ] || fail "Two serials, $serial and $arg. $usage"
+            serial="$arg"
+            ;;
+    esac
+done
+if $remove && $many; then fail "--many and --remove don't go together. $usage"; fi
 
 is_wear_emulator() {
     local characteristics
@@ -29,7 +42,6 @@ is_wear_emulator() {
     [[ "$1" == emulator-* && "$characteristics" == *watch* ]]
 }
 
-serial="${1:-}"
 if [ -n "$serial" ]; then
     is_wear_emulator "$serial" || fail "$serial is not a running Wear OS emulator; not touching it."
 else
@@ -54,6 +66,26 @@ songs=(
     "Šumadija.opus|Šumadija|Test Ensemble|90|600x600:0x6A1B9A"
 )
 
+# With --many: 40 more songs named from these words, in both formats, every fourth without a cover.
+# Built the same way each time, so --remove finds them too.
+colors=(0x8D6E63 0x1565C0 0xAD1457 0x00897B 0xF9A825 0x4527A0 0x558B2F 0xC62828 0x37474F 0xEF6C00)
+artists=("Test Ensemble" "Test Trio" "Test Choir")
+more=()
+i=0
+for first in Quiet Golden Distant Old Silver Wild Little Northern; do
+    for second in Road Meadow Harbor Lantern Valley; do
+        title="$first $second"
+        format=opus; [ $((i % 2)) = 1 ] && format=m4a
+        cover=""
+        if [ $((i % 4)) != 3 ]; then
+            size=600x600; [ $((i % 3)) = 0 ] && size=1280x720
+            cover="$size:${colors[i % ${#colors[@]}]}"
+        fi
+        more+=("$title.$format|$title|${artists[i % ${#artists[@]}]}|$((120 + i * 37 % 240))|$cover")
+        i=$((i + 1))
+    done
+done
+
 # Songs that can't be played: file, and how it's broken. "bytes" is random bytes, which fail at
 # once (one sorts second, one last); "cut" is a real song cut off at 40%, which fails as it plays.
 broken=(
@@ -70,7 +102,7 @@ scan() {
 }
 
 if $remove; then
-    for song in "${songs[@]}" "${broken[@]}"; do
+    for song in "${songs[@]}" "${more[@]}" "${broken[@]}"; do
         "$adb" -s "$serial" shell rm -f "\"$songs_dir/${song%%|*}\""
         scan "$songs_dir/${song%%|*}"
     done
@@ -96,6 +128,8 @@ block += struct.pack(">IIIII", width, height, 24, 0, len(data)) + data
 print(base64.b64encode(block).decode())
 EOF
 }
+
+$many && songs+=("${more[@]}")
 
 for song in "${songs[@]}"; do
     IFS='|' read -r file title artist seconds cover <<<"$song"
