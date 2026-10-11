@@ -84,8 +84,9 @@ private fun MacrobenchmarkScope.tapFirstSong() {
 
 /**
  * Every screen, from Home, as a person uses them: All songs scrolled and a song played, the next
- * songs, the Queue scrolled and a song played from it, back to Home with its playing song, and
- * Settings with About. It ends paused, so no music plays on between runs.
+ * songs, the Queue scrolled and a song played from it, back to Home with its playing song,
+ * Settings with About, Stop playing, and another theme. It ends with nothing playing, so no music
+ * plays on between runs, and in walnut.
  */
 fun MacrobenchmarkScope.useEveryScreen() {
     tap("All songs")
@@ -132,16 +133,47 @@ fun MacrobenchmarkScope.useEveryScreen() {
     // Settings is the edge button at the end of Home.
     repeat(2) { drag(down = true) }
     tap("Settings")
+    // Below Stop playing, Theme and Rescan music: at the end of the list, which can't bring it up to
+    // the middle of the screen.
+    waitFor("Rescan music")
+    drag(down = true)
     tap("About")
     waitFor("Plays the music stored on your watch.")
     pressBack()
     waitFor("Rescan music")
-    pressBack()
-    // Home, still at its end.
-    waitFor("Folders")
 
+    // Paused and stopped, so a theme shows: the song's cover would color the screens.
     device.executeShellCommand("cmd media_session dispatch pause")
+    scrollToAndTap("Stop playing", down = false)
+    // Gusle closes as the song goes; it opens again on Home, in the theme.
+    openHome()
+    useThemes()
     Thread.sleep(1_000)
+}
+
+/**
+ * From Home with nothing playing, chooses another theme in Settings → Theme, which recolors every
+ * screen at once, and goes back through them in it; then chooses walnut again, so the next run
+ * starts the same.
+ */
+private fun MacrobenchmarkScope.useThemes() {
+    for (theme in listOf("Plum", "Walnut")) {
+        repeat(2) { drag(down = true) }
+        tap("Settings")
+        tap("Theme")
+        // Plum is further down the list, walnut at its top.
+        scrollToAndTap(theme, down = true)
+        // The Theme screen stays open, in the new colors.
+        Thread.sleep(1_000)
+        pressBack()
+        // Settings, naming it.
+        waitFor("Rescan music")
+        waitFor(theme)
+        pressBack()
+        // Home, still at its end.
+        waitFor("Folders")
+        Thread.sleep(1_000)
+    }
 }
 
 // UI Automator gets no event when Gusle's lists scroll: its own scrolling waits for one that never

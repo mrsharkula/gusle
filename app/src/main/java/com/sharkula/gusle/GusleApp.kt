@@ -13,6 +13,7 @@ import com.sharkula.gusle.playback.UnplayableSongs
 import com.sharkula.gusle.ui.covers.CoverColors
 import com.sharkula.gusle.ui.covers.SongCoverFetcher
 import com.sharkula.gusle.ui.covers.SongCoverKeyer
+import com.sharkula.gusle.ui.theme.ThemeChoice
 import kotlinx.coroutines.flow.StateFlow
 
 class GusleApp : Application(), SingletonImageLoader.Factory {
@@ -31,6 +32,12 @@ class GusleApp : Application(), SingletonImageLoader.Factory {
 
     /** The songs the playback service couldn't play, which it shares with the screens. */
     val unplayable by lazy { UnplayableSongs() }
+
+    /**
+     * The app theme chosen in Settings. Made, and read, as the screen first starts: the playback
+     * service starts the app alone too, with no screen to color.
+     */
+    val themeChoice by lazy { ThemeChoice(this) }
 
     override fun onCreate() {
         super.onCreate()
@@ -59,3 +66,6 @@ val Context.playingSong: StateFlow<PlayingSong?> get() = (applicationContext as 
 
 /** The songs the playback service couldn't play; see [UnplayableSongs]. */
 val Context.unplayableSongs: UnplayableSongs get() = (applicationContext as GusleApp).unplayable
+
+/** The app's one [ThemeChoice], from any of its contexts. */
+val Context.themeChoice: ThemeChoice get() = (applicationContext as GusleApp).themeChoice

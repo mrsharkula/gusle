@@ -40,6 +40,17 @@
     <string name="stop_playing">Stop playing</string>
     <string name="rescan_music">Rescan music</string>
     <string name="rescanning">Scanning…</string>
+    <string name="theme">Theme</string>
+    <string name="theme_default">Default</string>
+    <!-- Under the list of themes: while such a song plays, the screens are in its colors, so a
+         theme chosen then doesn't show yet. -->
+    <string name="theme_note">Songs with a cover keep their cover’s colors.</string>
+    <string name="theme_walnut">Walnut</string>
+    <string name="theme_olive">Olive</string>
+    <string name="theme_basil">Basil</string>
+    <string name="theme_adriatic">Adriatic</string>
+    <string name="theme_plum">Plum</string>
+    <string name="theme_peony">Peony</string>
     <string name="about">About</string>
     <string name="version">Version %1$s</string>
     <string name="about_text">Plays the music stored on your watch.</string>

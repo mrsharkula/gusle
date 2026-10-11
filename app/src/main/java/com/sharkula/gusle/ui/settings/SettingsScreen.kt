@@ -1,6 +1,8 @@
 package com.sharkula.gusle.ui.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -22,11 +24,13 @@ import com.sharkula.gusle.ui.components.ListButton
 import com.sharkula.gusle.ui.components.ListScreen
 import com.sharkula.gusle.ui.songs.RescanState
 import com.sharkula.gusle.ui.songs.rememberRescanState
+import com.sharkula.gusle.ui.theme.AppTheme
 import com.sharkula.gusle.ui.theme.GusleTheme
+import com.sharkula.gusle.ui.theme.LocalAppTheme
 
 /**
- * Stop playing, while there's a song to stop; Rescan music, with how many songs there are; and
- * About, with Gusle's version. Opened from Home.
+ * Stop playing, while there's a song to stop; Theme, with the chosen one's name; Rescan music, with
+ * how many songs there are; and About, with Gusle's version. Opened from Home.
  */
 @Composable
 fun SettingsScreen(
@@ -37,14 +41,20 @@ fun SettingsScreen(
     songTitle: String?,
     /** Stop playing was tapped: stop the song, forget it, and close Gusle. */
     onStopPlaying: () -> Unit,
+    onTheme: () -> Unit,
     onAbout: () -> Unit,
 ) {
     val rescan = rememberRescanState(LocalContext.current.musicLibrary)
+    // Makes every theme's colors now, in the background, for the Theme screen's circles and for
+    // choosing one, so neither waits for them.
+    LaunchedEffect(Unit) { AppTheme.makeAllColors() }
     SettingsScreen(
         songCount = songCount,
         hasSong = hasSong,
         songTitle = songTitle,
         onStopPlaying = onStopPlaying,
+        themeName = LocalAppTheme.current.label,
+        onTheme = onTheme,
         scanning = rescan.busy,
         iconRotation = { rescan.rotation },
         version = rememberVersionName(),
@@ -60,6 +70,9 @@ private fun SettingsScreen(
     hasSong: Boolean,
     songTitle: String?,
     onStopPlaying: () -> Unit,
+    /** The chosen app theme's name; shown also while the screen is in a song's colors. */
+    @StringRes themeName: Int,
+    onTheme: () -> Unit,
     /** From the Rescan tap until it's done; see [RescanState]. */
     scanning: Boolean,
     /** The refresh icon's angle in degrees, read only while drawing. */
@@ -92,6 +105,22 @@ private fun SettingsScreen(
                     },
                 )
             }
+        }
+        item(key = "theme") {
+            ListButton(
+                onClick = onTheme,
+                transformationSpec = transformationSpec,
+                colors = rowColors,
+                icon = {
+                    IconCircle(
+                        icon = R.drawable.ic_palette,
+                        background = colors.secondaryContainer,
+                        tint = colors.onSecondaryContainer,
+                    )
+                },
+                label = { Text(stringResource(R.string.theme)) },
+                secondaryLabel = { Text(stringResource(themeName)) },
+            )
         }
         item(key = "rescan") {
             ListButton(
@@ -150,6 +179,8 @@ private fun SettingsScreenPreview() {
             hasSong = false,
             songTitle = null,
             onStopPlaying = {},
+            themeName = AppTheme.Default.label,
+            onTheme = {},
             scanning = false,
             iconRotation = { 0f },
             version = "1.0",
@@ -169,6 +200,8 @@ private fun SettingsScreenScanningPreview() {
             hasSong = false,
             songTitle = null,
             onStopPlaying = {},
+            themeName = AppTheme.Default.label,
+            onTheme = {},
             scanning = true,
             iconRotation = { 0f },
             version = "1.0",
@@ -188,6 +221,8 @@ private fun SettingsScreenPlayingPreview() {
             hasSong = true,
             songTitle = "River at Dawn",
             onStopPlaying = {},
+            themeName = AppTheme.Default.label,
+            onTheme = {},
             scanning = false,
             iconRotation = { 0f },
             version = "1.0",

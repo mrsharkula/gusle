@@ -21,6 +21,7 @@ import androidx.navigation3.ui.NavDisplay
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.playingSong
+import com.sharkula.gusle.themeChoice
 import com.sharkula.gusle.ui.covers.SongCover
 import com.sharkula.gusle.ui.covers.playingSongColors
 import com.sharkula.gusle.ui.home.HomeScreen
@@ -31,8 +32,10 @@ import com.sharkula.gusle.ui.playback.shuffleAll
 import com.sharkula.gusle.ui.queue.QueueScreen
 import com.sharkula.gusle.ui.settings.AboutScreen
 import com.sharkula.gusle.ui.settings.SettingsScreen
+import com.sharkula.gusle.ui.settings.ThemeScreen
 import com.sharkula.gusle.ui.songs.AllSongsScreen
 import com.sharkula.gusle.ui.theme.GusleTheme
+import com.sharkula.gusle.ui.theme.LocalAppTheme
 import kotlinx.serialization.Serializable
 
 /** The app's screens. Arguments a screen needs later become properties of its key. */
@@ -52,6 +55,9 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object Settings : Screen
+
+    @Serializable
+    data object Theme : Screen
 
     @Serializable
     data object About : Screen
@@ -199,8 +205,15 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                         songTitle = playing?.title,
                         // Gusle closes once the song's gone; it opens next time with nothing playing.
                         onStopPlaying = { player.stopAndForget { activity?.finish() } },
+                        onTheme = { go(Screen.Theme) },
                         onAbout = { go(Screen.About) },
                     )
+                }
+            }
+            entry<Screen.Theme>(metadata = slidesIn(Screen.Theme)) {
+                val themes = LocalContext.current.themeChoice
+                PlayingSongTheme(songs) { _, _ ->
+                    ThemeScreen(current = LocalAppTheme.current, onChoose = themes::choose)
                 }
             }
             entry<Screen.About>(metadata = slidesIn(Screen.About)) {
