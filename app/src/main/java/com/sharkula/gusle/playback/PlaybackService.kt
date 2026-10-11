@@ -8,6 +8,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import androidx.media3.session.MediaSession
@@ -40,6 +41,16 @@ import kotlinx.coroutines.launch
 private const val SaveEveryMs = 10_000L
 
 /**
+ * While it plays on, the notification is updated this long after the first update asked for,
+ * with every one asked for meanwhile (see [PlaybackService.onUpdateNotificationAsync]): past a song
+ * change's busy first two seconds on the watch, when Now playing shows the new cover (up to ~1.3 s)
+ * and the player fills its buffer (~1.6–2 s), and after the screens below catch up (StackScene's
+ * CatchUpDelayMs and CatchUpStaggerMs: 2.4 s, 2.7 s). Counted from the first update rather than the
+ * last, so skipping song after song can't put it off for long.
+ */
+private const val NotificationUpdateDelayMs = 3_200L
+
+/**
  * Asks the service to stop and forget what it played, as if nothing had: Stop playing in Settings.
  * Only Gusle's screens may send it.
  */
@@ -62,6 +73,11 @@ class PlaybackService : MediaSessionService() {
     private val lastPlayed get() = (application as GusleApp).lastPlayed
     private val unplayable get() = (application as GusleApp).unplayable
     private var savingWhilePlaying: Job? = null
+    private var notificationUpdate: Job? = null
+    private var updatingNotification = false
+
+    /** Whether the last notification update that went out kept the service in the foreground. */
+    private var notificationInForeground = false
 
     /**
      * Tells the screens what's playing, so they can show it without connecting, and saves it to
@@ -126,6 +142,45 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = session
+
+    /**
+     * Media3 updates the notification for each change in the player: about five times for a new
+     * song, each time also asking to stay in the foreground. On the watch, that was 34 of the ~62
+     * binder calls a song change made on the main thread, which Now playing draws on too, so it
+     * dropped frames (measured 2026-10-10). While it plays on in the foreground, the updates asked
+     * for go out as one, [NotificationUpdateDelayMs] after the first; it still shows the newest
+     * state. Anything else goes out at once: going into the foreground, as Android requires, and
+     * pausing or stopping, for which Media3 asks to stay in the foreground for a while yet.
+     */
+    @OptIn(UnstableApi::class) // onUpdateNotificationAsync, shouldShowPlayButton
+    override fun onUpdateNotificationAsync(
+        session: MediaSession,
+        startInForegroundRequired: Boolean,
+    ): ListenableFuture<Void?> {
+        // Not Media3's isPlaybackOngoing: it stays true once the service has been in the foreground.
+        val playsOn = !Util.shouldShowPlayButton(session.player)
+        if (startInForegroundRequired && notificationInForeground && playsOn && !updatingNotification) {
+            if (notificationUpdate == null) {
+                notificationUpdate = scope.launch {
+                    delay(NotificationUpdateDelayMs)
+                    notificationUpdate = null
+                    // Back here with what Media3 asks for now, which this time goes out.
+                    updatingNotification = true
+                    try {
+                        triggerNotificationUpdate()
+                    } finally {
+                        updatingNotification = false
+                    }
+                }
+            }
+            return Futures.immediateVoidFuture()
+        }
+        // The newest state, so one waiting isn't needed anymore.
+        notificationUpdate?.cancel()
+        notificationUpdate = null
+        notificationInForeground = startInForegroundRequired
+        return super.onUpdateNotificationAsync(session, startInForegroundRequired)
+    }
 
     override fun onDestroy() {
         scope.cancel()

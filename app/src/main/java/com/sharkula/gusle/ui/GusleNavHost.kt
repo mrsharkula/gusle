@@ -216,13 +216,16 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
  * A screen in the colors of the player's song's cover, without connecting to the player.
  * [content] gets the song, playing or paused, or null when there's none, or it's no longer among
  * the [songs] (deleted while playing). Each such screen follows the player itself, so a change
- * there composes just that screen again, not the navigation around it.
+ * there composes just that screen again, not the navigation around it. Hidden below the top
+ * screen, it follows the player a moment later ([heldWhileHidden]).
  */
 @Composable
 private fun PlayingSongTheme(songs: Songs.Loaded, content: @Composable (playing: Song?, isPlaying: Boolean) -> Unit) {
     val playingSong by LocalContext.current.playingSong.collectAsStateWithLifecycle()
-    val song = playingSong?.let { songs.byId[it.songId] }
+    // Its colors too: they follow the song.
+    val shownSong = heldWhileHidden(playingSong)
+    val song = shownSong?.let { songs.byId[it.songId] }
     GusleTheme(colorScheme = playingSongColors(song?.let(::SongCover))) {
-        content(song, playingSong?.isPlaying == true)
+        content(song, shownSong?.isPlaying == true)
     }
 }

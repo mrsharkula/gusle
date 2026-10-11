@@ -150,6 +150,9 @@ class CoverColors(private val context: Context) {
             when (val result = read(cover, sizePx, Scale.FILL, keep = true)) {
                 is SuccessResult -> {
                     val picture = result.image.toBitmap()
+                    // Onto the GPU now, while its colors are worked out, rather than in the frame it
+                    // goes up in: ~2.3 ms of that frame on the watch.
+                    picture.prepareToDraw()
                     CoverArt(cover, picture.asImageBitmap(), (known(cover) ?: colorsOf(cover, picture)).scheme)
                 }
                 is ErrorResult -> CoverArt(cover, null, noColors(cover, result)?.scheme)

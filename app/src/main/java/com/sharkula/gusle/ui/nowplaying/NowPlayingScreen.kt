@@ -38,6 +38,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -192,9 +193,16 @@ private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: 
     val song = mediaItem?.songId?.let(songsById::get)
     val metadata = item.mediaMetadata
     // Through the connection rather than the player shown: right after Gusle comes back to the
-    // screen, that's the one let go of, and a tap then waits for the new one.
+    // screen, that's the one let go of, and a tap then waits for the new one. Remembered, like the
+    // progress below, so a new song doesn't compose the controls and the ring again.
     fun command(enabled: Boolean, action: Player.() -> Unit): (() -> Unit)? =
         if (enabled) ({ connection.withPlayer(action) }) else null
+    val onPrevious = remember(connection, previous.isEnabled) { command(previous.isEnabled) { seekToPrevious() } }
+    val onPlayPause = remember(connection, playPause.isEnabled) {
+        command(playPause.isEnabled) { Util.handlePlayPauseButtonAction(this) }
+    }
+    val onNext = remember(connection, next.isEnabled) { command(next.isEnabled) { seekToNext() } }
+    val songDurationMs by rememberUpdatedState(song?.durationMs ?: 0)
 
     // The song's cover and its colors go up together once both are ready; until then the last
     // ones stay. Opened again on the song shown last, they're up in the first frame.
@@ -216,14 +224,14 @@ private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: 
         artist = (metadata.artist ?: song?.artist)?.toString(),
         art = art,
         isPlaying = !playPause.showPlay,
-        progress = { progress.fraction(song?.durationMs ?: 0) },
+        progress = remember(progress) { { progress.fraction(songDurationMs) } },
         animate = animate,
         volume = volume,
         shuffleOn = shuffle.shuffleOn,
         cantPlay = cantPlay::value,
-        onPrevious = command(previous.isEnabled) { seekToPrevious() },
-        onPlayPause = command(playPause.isEnabled) { Util.handlePlayPauseButtonAction(this) },
-        onNext = command(next.isEnabled) { seekToNext() },
+        onPrevious = onPrevious,
+        onPlayPause = onPlayPause,
+        onNext = onNext,
         onQueue = onQueue,
     )
 }

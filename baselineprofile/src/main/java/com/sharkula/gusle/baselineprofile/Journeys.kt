@@ -54,16 +54,32 @@ fun MacrobenchmarkScope.rememberFirstSong() {
     // Home shows the song it came back to on top, paused; a test before may have left one.
     if (find("Paused") == null) {
         tap("All songs")
-        waitFor("Shuffle all")
-        // Its title comes right after Shuffle all.
-        val shown = onScreen()
-        tap(shown[shown.indexOfFirst { (label, _) -> label == "Shuffle all" } + 1].first)
+        tapFirstSong()
         tap("Pause")
         // Saved as it pauses.
         waitFor("Play")
         Thread.sleep(1_000)
     }
     pressHome()
+}
+
+/**
+ * From Home, with no song remembered (e.g. its data cleared), plays the first song of all in All
+ * songs, which opens Now playing on it: the screens someone listening has open, Home → All songs →
+ * Now playing. A remembered song would open paused instead.
+ */
+fun MacrobenchmarkScope.playFirstSong() {
+    tap("All songs")
+    tapFirstSong()
+    waitFor("Pause")
+}
+
+/** Taps the first song in All songs. */
+private fun MacrobenchmarkScope.tapFirstSong() {
+    waitFor("Shuffle all")
+    // Its title comes right after Shuffle all.
+    val shown = onScreen()
+    tap(shown[shown.indexOfFirst { (label, _) -> label == "Shuffle all" } + 1].first)
 }
 
 /**
