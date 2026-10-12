@@ -34,10 +34,16 @@ sealed interface Songs {
     /** Reading failed, and no earlier read has succeeded. */
     data object Failed : Songs
 
-    /** Every song, A–Z by title. */
-    data class Loaded(val list: List<Song>) : Songs {
+    /**
+     * Every song, A–Z by title, and the same songs by artist ([groupByArtist]). Both are read and
+     * grouped together off the main thread, so songs read again unchanged are equal to the last.
+     */
+    data class Loaded(val list: List<Song>, val artists: List<Artist>) : Songs {
         /** The same songs by [Song.id], built the first time it's needed. */
         val byId: Map<Long, Song> by lazy { list.associateBy { it.id } }
+
+        /** The [artists] by [Artist.key], made with them. */
+        val artistsByKey: Map<String?, Artist> = artists.associateBy { it.key }
     }
 }
 
@@ -99,6 +105,11 @@ class MusicLibrary(context: Context) {
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DISPLAY_NAME,
             MediaStore.Audio.Media.DATE_MODIFIED,
+            MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.ALBUM_ID,
+            MediaStore.Audio.Media.ALBUM_ARTIST,
+            MediaStore.Audio.Media.TRACK,
+            MediaStore.Audio.Media.RELATIVE_PATH,
         )
         val songs: List<Song> = try {
             // IS_MUSIC leaves out ringtones, notification sounds, alarms and recordings.
@@ -111,9 +122,19 @@ class MusicLibrary(context: Context) {
                 val duration = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 val fileName = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
                 val modified = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+                val album = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                val albumId = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+                val albumArtist = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ARTIST)
+                val track = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
+                val folder = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
                 buildList<Song>(cursor.count) {
                     while (cursor.moveToNext()) {
                         val songId = cursor.getLong(id)
+                        // MediaStore names the album after the song's folder when there's no album
+                        // tag, e.g. "Received" for every such song sent with Wear Files. An album
+                        // tagged with its folder's name can't be told from that, and counts as none.
+                        val albumName = cursor.getString(album).known()
+                            ?.takeIf { it != cursor.getString(folder)?.folderName() }
                         add(
                             Song(
                                 id = songId,
@@ -123,10 +144,14 @@ class MusicLibrary(context: Context) {
                                 title = cursor.getString(title)?.takeIf { it.isNotBlank() }
                                     ?: cursor.getString(fileName).orEmpty().substringBeforeLast('.'),
                                 // MediaStore fills in "<unknown>" when there's no artist tag.
-                                artist = cursor.getString(artist)
-                                    ?.takeIf { it.isNotBlank() && it != MediaStore.UNKNOWN_STRING },
+                                artist = cursor.getString(artist).known(),
                                 durationMs = cursor.getLong(duration),
                                 fileModified = cursor.getLong(modified),
+                                album = albumName,
+                                albumId = if (albumName != null) cursor.getLong(albumId) else null,
+                                albumArtist = cursor.getString(albumArtist).known(),
+                                // 0 when there's none.
+                                track = cursor.getInt(track).takeIf { it > 0 },
                             ),
                         )
                     }
@@ -148,8 +173,14 @@ class MusicLibrary(context: Context) {
                     .thenBy { it.second.id },
             )
             .map { it.second }
-        return Songs.Loaded(sorted)
+        return Songs.Loaded(sorted, groupByArtist(sorted, collator))
     }
+
+    /** Null for a blank tag, or the "<unknown>" MediaStore may fill in for one that's missing. */
+    private fun String?.known(): String? = this?.takeIf { it.isNotBlank() && it != MediaStore.UNKNOWN_STRING }
+
+    /** The last folder in a MediaStore relative path, e.g. "Received" in "Download/Received/". */
+    private fun String.folderName(): String = trimEnd('/').substringAfterLast('/')
 
     private companion object {
         const val Tag = "MusicLibrary"

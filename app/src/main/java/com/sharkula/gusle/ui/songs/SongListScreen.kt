@@ -26,9 +26,13 @@ import com.sharkula.gusle.ui.components.ListScreen
 import com.sharkula.gusle.ui.covers.rememberRowNoCoverPainter
 import com.sharkula.gusle.ui.theme.GusleTheme
 
-/** Every song on the watch, A–Z, with Shuffle all on top. The player's song is marked. */
+/**
+ * A list of songs under its [title], with Shuffle all on top: All songs, or an artist's songs. The
+ * player's song is marked. Tapping a song plays it and then the rest of the list, in its order.
+ */
 @Composable
-fun AllSongsScreen(
+fun SongListScreen(
+    title: String,
     songs: List<Song>,
     /** The player's song, playing or paused; null when there's none. */
     playing: Song?,
@@ -41,7 +45,7 @@ fun AllSongsScreen(
 ) {
     val noCover = rememberRowNoCoverPainter()
 
-    ListScreen(title = pluralStringResource(R.plurals.song_count, songs.size, songs.size)) { transformationSpec ->
+    ListScreen(title = title) { transformationSpec ->
         item(key = "shuffle all") {
             ListButton(
                 onClick = onShuffleAll,
@@ -78,13 +82,21 @@ fun AllSongsScreen(
 
 @Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true)
 @Composable
-private fun AllSongsScreenPreview() {
+private fun SongListScreenPreview() {
     val songs = listOf(
         Song(1, Uri.EMPTY, "A Very Long Song Title That Runs Past the Edge", "Test Trio", 249_000, 0),
         Song(2, Uri.EMPTY, "Length unknown", "Test Ensemble", 0, 0),
         Song(3, Uri.EMPTY, "River at Dawn", "Test Ensemble", 211_000, 0),
     )
     GusleTheme {
-        AllSongsScreen(songs, playing = songs[2], isPlaying = true, onShuffleAll = {}, onSong = {}, onPlayingSong = {})
+        SongListScreen(
+            pluralStringResource(R.plurals.song_count, songs.size, songs.size),
+            songs,
+            playing = songs[2],
+            isPlaying = true,
+            onShuffleAll = {},
+            onSong = {},
+            onPlayingSong = {},
+        )
     }
 }

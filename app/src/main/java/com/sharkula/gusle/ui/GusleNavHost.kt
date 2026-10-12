@@ -3,6 +3,7 @@ package com.sharkula.gusle.ui
 import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -11,6 +12,8 @@ import androidx.compose.runtime.saveable.rememberSerializable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import androidx.navigation3.runtime.NavBackStack
@@ -18,10 +21,13 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.serialization.NavBackStackSerializer
 import androidx.navigation3.ui.NavDisplay
+import com.sharkula.gusle.R
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
+import com.sharkula.gusle.playback.QueueSource
 import com.sharkula.gusle.playingSong
 import com.sharkula.gusle.themeChoice
+import com.sharkula.gusle.ui.artists.ArtistsScreen
 import com.sharkula.gusle.ui.covers.SongCover
 import com.sharkula.gusle.ui.covers.playingSongColors
 import com.sharkula.gusle.ui.home.HomeScreen
@@ -33,7 +39,7 @@ import com.sharkula.gusle.ui.queue.QueueScreen
 import com.sharkula.gusle.ui.settings.AboutScreen
 import com.sharkula.gusle.ui.settings.SettingsScreen
 import com.sharkula.gusle.ui.settings.ThemeScreen
-import com.sharkula.gusle.ui.songs.AllSongsScreen
+import com.sharkula.gusle.ui.songs.SongListScreen
 import com.sharkula.gusle.ui.theme.GusleTheme
 import com.sharkula.gusle.ui.theme.LocalAppTheme
 import kotlinx.serialization.Serializable
@@ -46,6 +52,16 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object AllSongs : Screen
+
+    @Serializable
+    data object Artists : Screen
+
+    /**
+     * An artist's songs, by the artist's [com.sharkula.gusle.data.Artist.key]: null for the songs
+     * without an artist.
+     */
+    @Serializable
+    data class Artist(val key: String?) : Screen
 
     @Serializable
     data object NowPlaying : Screen
@@ -137,6 +153,11 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
             }
         }
     }
+    // An artist whose songs are all gone when they're read anew closes, wherever it is in the stack,
+    // rather than showing no songs; so does one the stack was saved with.
+    LaunchedEffect(songs) {
+        backStack.removeAll { it is Screen.Artist && it.key !in songs.artistsByKey }
+    }
     val player = rememberPlayerConnection()
 
     /** Starts playing (connecting first if needed), and opens Now playing on it. */
@@ -146,6 +167,24 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
     }
 
     fun slidesIn(screen: Screen) = if (slidingIn == screen) SlideIn else emptyMap()
+
+    /**
+     * The songs in [list] under their [title], played from the tapped one, or shuffled, as songs
+     * from [source]. The player's song opens Now playing.
+     */
+    @Composable
+    fun SongList(title: String, source: QueueSource, list: List<Song>, playing: Song?, isPlaying: Boolean) {
+        SongListScreen(
+            title,
+            list,
+            playing = playing,
+            isPlaying = isPlaying,
+            onShuffleAll = { play { shuffleAll(list, source) } },
+            onSong = { index -> play { playFrom(list, index, source) } },
+            // Rather than starting it again: on a watch, taps happen by accident.
+            onPlayingSong = { go(Screen.NowPlaying) },
+        )
+    }
 
     NavDisplay(
         backStack = backStack,
@@ -161,26 +200,53 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                 PlayingSongTheme(songs) { playing, isPlaying ->
                     HomeScreen(
                         songCount = songs.list.size,
+                        // The songs without an artist aren't an artist's.
+                        artistCount = songs.artists.count { it.name != null },
                         playing = playing,
                         isPlaying = isPlaying,
                         // It goes on as it is.
                         onPlaying = { go(Screen.NowPlaying) },
                         onAllSongs = { go(Screen.AllSongs) },
+                        onArtists = { go(Screen.Artists) },
                         onSettings = { go(Screen.Settings) },
                     )
                 }
             }
             entry<Screen.AllSongs>(metadata = slidesIn(Screen.AllSongs)) {
                 PlayingSongTheme(songs) { playing, isPlaying ->
-                    AllSongsScreen(
-                        songs.list,
+                    SongList(
+                        title = pluralStringResource(R.plurals.song_count, songs.list.size, songs.list.size),
+                        source = QueueSource.AllSongs,
+                        list = songs.list,
                         playing = playing,
                         isPlaying = isPlaying,
-                        onShuffleAll = { play { shuffleAll(songs.list) } },
-                        onSong = { index -> play { playFrom(songs.list, index) } },
-                        // Rather than starting it again: on a watch, taps happen by accident.
-                        onPlayingSong = { go(Screen.NowPlaying) },
                     )
+                }
+            }
+            entry<Screen.Artists>(metadata = slidesIn(Screen.Artists)) {
+                PlayingSongTheme(songs) { playing, isPlaying ->
+                    ArtistsScreen(
+                        songs.artists,
+                        playing = playing,
+                        isPlaying = isPlaying,
+                        onArtist = { go(Screen.Artist(it.key)) },
+                    )
+                }
+            }
+            entry<Screen.Artist>(metadata = { slidesIn(it) }) { screen ->
+                // When their songs are all gone, the screen closes (see above) showing what it
+                // showed, rather than nothing. One the stack was saved with has nothing to show.
+                val artist = lastNotNull(songs.artistsByKey[screen.key])
+                if (artist != null) {
+                    PlayingSongTheme(songs) { playing, isPlaying ->
+                        SongList(
+                            title = artist.name ?: stringResource(R.string.unknown_artist),
+                            source = QueueSource.Artist(screen.key),
+                            list = artist.songs,
+                            playing = playing,
+                            isPlaying = isPlaying,
+                        )
+                    }
                 }
             }
             entry<Screen.NowPlaying>(metadata = slidesIn(Screen.NowPlaying)) {
@@ -223,6 +289,21 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
             }
         },
     )
+}
+
+/**
+ * [value], or while it's null, the last value it had that wasn't: e.g. an artist whose songs are all
+ * gone, until their screen has closed.
+ */
+@Composable
+private fun <T : Any> lastNotNull(value: T?): T? {
+    val last = remember { LastNotNull<T>() }
+    SideEffect { if (value != null) last.value = value }
+    return value ?: last.value
+}
+
+private class LastNotNull<T : Any> {
+    var value: T? = null
 }
 
 /**

@@ -1,5 +1,6 @@
 package com.sharkula.gusle.ui.covers
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -34,13 +35,13 @@ fun SongCoverCircle(cover: SongCover, noCover: Painter, modifier: Modifier = Mod
 }
 
 /**
- * The music note in a list row's circle, while a cover loads and for songs without one. A list
- * makes it once for all its rows, and it stays the one painter: when the colors change, it takes
- * them on, so rows already showing it change too.
+ * The [icon] in a list row's circle, while a cover loads and for songs without one: the music note,
+ * or e.g. a person for artists. A list makes it once for all its rows, and it stays the one
+ * painter: when the colors change, it takes them on, so rows already showing it change too.
  */
 @Composable
-fun rememberRowNoCoverPainter(): Painter {
-    val note = painterResource(R.drawable.ic_music_note)
+fun rememberRowNoCoverPainter(@DrawableRes icon: Int = R.drawable.ic_music_note): Painter {
+    val note = painterResource(icon)
     val colors = MaterialTheme.colorScheme
     val painter = remember {
         NoCoverPainter(note, SolidColor(colors.secondaryContainer), colors.onSecondaryContainer, RowCircleIconSize)

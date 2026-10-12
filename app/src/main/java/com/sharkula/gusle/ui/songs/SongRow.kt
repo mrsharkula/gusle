@@ -36,6 +36,38 @@ fun TransformingLazyColumnItemScope.SongRow(
     modifier: Modifier = Modifier,
     minHeight: Dp = ButtonDefaults.Height,
 ) {
+    CoverRow(
+        SongCover(song),
+        song.title,
+        secondaryLabel,
+        isPlaying,
+        noCover,
+        transformationSpec,
+        onClick,
+        modifier,
+        minHeight,
+    )
+}
+
+/**
+ * A row in a list with a song's [cover] in its circle: a song's own row ([SongRow]), or e.g. an
+ * artist's, with one of their songs' covers. Its [label] and the [secondaryLabel] under it end with
+ * "…" when they don't fit. While [isPlaying] isn't null, the row is highlighted, with the equalizer
+ * at the end: for the player's song, and for what it's from. [noCover] stands in for missing covers
+ * ([rememberRowNoCoverPainter], made once per list).
+ */
+@Composable
+fun TransformingLazyColumnItemScope.CoverRow(
+    cover: SongCover,
+    label: String,
+    secondaryLabel: String?,
+    isPlaying: Boolean?,
+    noCover: Painter,
+    transformationSpec: TransformationSpec,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    minHeight: Dp = ButtonDefaults.Height,
+) {
     // Accessibility services say what the equalizer shows.
     val state = isPlaying?.let { stringResource(if (it) R.string.playing else R.string.paused) }
     ListButton(
@@ -47,8 +79,8 @@ fun TransformingLazyColumnItemScope.SongRow(
         } else {
             ButtonDefaults.filledTonalButtonColors()
         },
-        icon = { SongCoverCircle(SongCover(song), noCover) },
-        label = { Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        icon = { SongCoverCircle(cover, noCover) },
+        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         secondaryLabel = if (secondaryLabel != null) {
             { Text(secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         } else {

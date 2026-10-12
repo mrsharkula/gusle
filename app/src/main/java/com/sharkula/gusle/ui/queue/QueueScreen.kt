@@ -60,6 +60,7 @@ import androidx.wear.tooling.preview.devices.WearDevices
 import com.sharkula.gusle.R
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.playback.playOrder
+import com.sharkula.gusle.playback.queueName
 import com.sharkula.gusle.playback.songId
 import com.sharkula.gusle.ui.components.ListScreen
 import com.sharkula.gusle.ui.components.edgeTransformation
@@ -90,10 +91,11 @@ private val Dimmed = Modifier.graphicsLayer {
 }
 
 /**
- * The player's songs in the order they play, under a shuffle toggle; opened from Now playing. It
- * opens on the player's song, with the songs played before it above, dimmed, and it follows the
- * player wherever it's controlled from. Tapping a song plays it, in the same order; tapping the
- * player's song goes back to Now playing ([onPlayingSong]).
+ * The player's songs in the order they play, under where they came from (e.g. All songs or an
+ * artist) and a shuffle toggle; opened from Now playing. It opens on the player's song, with the
+ * songs played before it above, dimmed, and it follows the player wherever it's controlled from.
+ * Tapping a song plays it, in the same order; tapping the player's song goes back to Now playing
+ * ([onPlayingSong]).
  */
 @OptIn(UnstableApi::class) // rememberPlayPauseButtonState, rememberShuffleButtonState
 @Composable
@@ -111,6 +113,7 @@ fun QueueScreen(connection: PlayerConnection, songsById: Map<Long, Song>, onPlay
     val unplayable by LocalContext.current.unplayableSongs.songIds.collectAsStateWithLifecycle()
     Queue(
         queue = state.queue,
+        name = state.name,
         songsById = songsById,
         current = state.current,
         isPlaying = !playPause.showPlay,
@@ -142,9 +145,9 @@ private fun rememberQueueState(player: Player, songsById: Map<Long, Song>): Queu
 }
 
 /**
- * The [player]'s queue ([PlayerQueue]) as far as its songs are among [songsById], and the item it's
- * on. The queue is built again only when the songs or their order change, not as the player moves
- * from song to song.
+ * The [player]'s queue ([PlayerQueue]) as far as its songs are among [songsById], its name, and the
+ * item it's on. The queue is built again only when the songs or their order change,
+ * not as the player moves from song to song.
  */
 @Stable
 private class QueueState(private val player: Player, private val songsById: Map<Long, Song>) : Player.Listener {
@@ -156,12 +159,15 @@ private class QueueState(private val player: Player, private val songsById: Map<
         private set
     var current by mutableIntStateOf(player.currentMediaItemIndex)
         private set
+    var name by mutableStateOf(player.queueName)
+        private set
 
     override fun onEvents(player: Player, events: Player.Events) = update()
 
     /** Takes what changed in the player. */
     fun update() {
         current = player.currentMediaItemIndex
+        name = player.queueName
         val newTimeline = player.currentTimeline
         val newShuffled = player.shuffleModeEnabled
         if (newTimeline === timeline && newShuffled == shuffled) return
@@ -189,6 +195,8 @@ private class QueueState(private val player: Player, private val songsById: Map<
 @Composable
 private fun Queue(
     queue: PlayerQueue,
+    /** The queue's name, after where its songs came from ([queueName]); All songs when it has none. */
+    name: String?,
     /** The songs on the watch, which include every song in the [queue]. */
     songsById: Map<Long, Song>,
     /** The player's item it's on. */
@@ -221,8 +229,7 @@ private fun Queue(
     val noCover = rememberRowNoCoverPainter()
     val cantPlay = stringResource(R.string.cant_play)
 
-    // Where the queue comes from: in v1, always All songs.
-    ListScreen(title = stringResource(R.string.all_songs), listState = listState) { transformationSpec ->
+    ListScreen(title = name ?: stringResource(R.string.all_songs), listState = listState) { transformationSpec ->
         item(key = "shuffle") {
             ShuffleToggle(shuffleOn, onShuffle, transformationSpec)
         }
@@ -324,6 +331,7 @@ private fun QueueShuffleOffPreview() {
     GusleTheme {
         Queue(
             queue = PlayerQueue.of(listOf(0, 1, 2), shuffled = false, { previewSongs[it].id }, onWatch = { true }),
+            name = "Test Ensemble",
             songsById = previewSongs.associateBy { it.id },
             current = 1,
             isPlaying = true,
@@ -342,6 +350,7 @@ private fun QueueShuffleOnPreview() {
     GusleTheme {
         Queue(
             queue = PlayerQueue.of(listOf(1, 2, 0), shuffled = true, { previewSongs[it].id }, onWatch = { true }),
+            name = null,
             songsById = previewSongs.associateBy { it.id },
             current = 1,
             isPlaying = true,

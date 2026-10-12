@@ -28,7 +28,7 @@ class SessionPlayerTest {
     private fun player(current: Int, shuffleOrder: List<Int>? = null): Pair<SessionPlayer, FakePlayer> {
         val fake = FakePlayer(listOf(10L, 20L, 30L, 40L), shuffleOrder)
         fake.current = current
-        return SessionPlayer(fake.player, unplayable, Random(7)) to fake
+        return SessionPlayer(fake.player, unplayable, nameOf = { source -> "Named $source" }, Random(7)) to fake
     }
 
     @Test
@@ -191,6 +191,38 @@ class SessionPlayerTest {
     }
 
     @Test
+    fun namesTheQueueAfterWhereItsSongsCameFrom() {
+        val (player, fake) = player(current = 0)
+        val artist = QueueSource.Artist("sabaton")
+        player.restore(fake.items, artist, current = 2, positionMs = 5_000, shuffleOrder = listOf(2, 0, 3, 1))
+        assertEquals(artist, player.queueSource)
+        assertEquals("Named $artist", fake.playlistTitle)
+        assertEquals(listOf(2, 0, 3, 1), fake.shuffleOrder)
+        // Renamed, e.g. after the songs are read anew, it's still the same artist's.
+        player.nameQueue()
+        assertEquals("Named $artist", fake.playlistTitle)
+    }
+
+    /** Only the screens set songs, and they note where they came from; songs that don't are All songs. */
+    @Test
+    fun songsThatDontSayWhereTheyCameFromAreAllSongs() {
+        val (player, fake) = player(current = 0)
+        player.restore(fake.items, QueueSource.Artist(null), current = 0, positionMs = 0, shuffleOrder = null)
+        player.setMediaItems(fake.items, 1, 0)
+        assertEquals(QueueSource.AllSongs, player.queueSource)
+        assertEquals("Named ${QueueSource.AllSongs}", fake.playlistTitle)
+    }
+
+    @Test
+    fun forgetsWhereTheSongsCameFromWithThem() {
+        val (player, fake) = player(current = 0)
+        player.restore(fake.items, QueueSource.Artist("sabaton"), current = 0, positionMs = 0, shuffleOrder = null)
+        player.clearMediaItems()
+        assertEquals(QueueSource.AllSongs, player.queueSource)
+        assertEquals(null, fake.playlistTitle)
+    }
+
+    @Test
     fun walksThePlayOrder() {
         val timeline = TestTimeline(4, shuffleOrder = listOf(2, 0, 3, 1))
         assertEquals(listOf(0, 1, 2, 3), timeline.playOrder(shuffled = false))
@@ -205,7 +237,7 @@ class SessionPlayerTest {
  * in [done], and the last shuffle order set in [shuffleOrder].
  */
 private class FakePlayer(songIds: List<Long>, shuffleOrder: List<Int>?) : InvocationHandler {
-    private val items = songIds.map { id ->
+    val items = songIds.map { id ->
         MediaItem.Builder()
             .setMediaId(id.toString())
             .setMediaMetadata(MediaMetadata.Builder().setTitle("Song $id").build())
@@ -214,6 +246,8 @@ private class FakePlayer(songIds: List<Long>, shuffleOrder: List<Int>?) : Invoca
     private var timeline = TestTimeline(songIds.size, shuffleOrder)
     private var shuffled = shuffleOrder != null
     private val listeners = mutableListOf<Player.Listener>()
+    private var cleared = false
+    private var playlistMetadata = MediaMetadata.EMPTY
 
     var current = 0
 
@@ -224,6 +258,7 @@ private class FakePlayer(songIds: List<Long>, shuffleOrder: List<Int>?) : Invoca
     var shuffleOrder = emptyList<Int>()
     val player = Proxy.newProxyInstance(ExoPlayer::class.java.classLoader, arrayOf(ExoPlayer::class.java), this) as ExoPlayer
     val hasListeners get() = listeners.isNotEmpty()
+    val playlistTitle get() = playlistMetadata.title?.toString()
 
     fun reportState(state: Int) = listeners.toList().forEach { it.onPlaybackStateChanged(state) }
 
@@ -235,7 +270,7 @@ private class FakePlayer(songIds: List<Long>, shuffleOrder: List<Int>?) : Invoca
             "getCurrentMediaItemIndex" -> return current
             "getCurrentMediaItem" -> return items[current]
             "getMediaItemAt" -> return items[arg(0) as Int]
-            "getMediaItemCount" -> return items.size
+            "getMediaItemCount" -> return if (cleared) 0 else items.size
             "getCurrentTimeline" -> return timeline
             "getShuffleModeEnabled" -> return shuffled
             "setShuffleModeEnabled" -> {
@@ -259,6 +294,9 @@ private class FakePlayer(songIds: List<Long>, shuffleOrder: List<Int>?) : Invoca
                 done += "seek $current"
             }
             "setMediaItems" -> current = arg(1) as Int
+            "clearMediaItems" -> cleared = true
+            "getPlaylistMetadata" -> return playlistMetadata
+            "setPlaylistMetadata" -> playlistMetadata = arg(0) as MediaMetadata
             "prepare" -> done += "prepare"
             "pause" -> done += "pause"
             "release" -> Unit

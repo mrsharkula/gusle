@@ -27,6 +27,31 @@ class LastPlayedTest {
     }
 
     @Test
+    fun comesBackWithWhereTheSongsCameFrom() {
+        val artist = queue.copy(source = QueueSource.Artist("sabaton"))
+        lastPlayed().save(artist)
+        assertEquals(artist, lastPlayed().loaded())
+    }
+
+    /** Saved before Gusle kept where the songs came from: they came from All songs. */
+    @Test
+    fun aQueueSavedWithoutWhereItCameFromHasNone() {
+        lastPlayed().save(queue.copy(source = QueueSource.Artist("sabaton")))
+        files.getValue("last_played_queue").values.remove("source")
+        assertEquals(queue.copy(source = QueueSource.AllSongs), lastPlayed().loaded())
+    }
+
+    @Test
+    fun writesTheSongsAgainWhenOnlyWhereTheyCameFromChanges() {
+        val lastPlayed = lastPlayed()
+        lastPlayed.save(queue.copy(source = QueueSource.AllSongs))
+        lastPlayed.save(queue.copy(source = QueueSource.Artist("sabaton")))
+        assertEquals(2, files.getValue("last_played_queue").writes)
+        assertEquals(1, files.getValue("last_played_position").writes)
+        assertEquals(queue.copy(source = QueueSource.Artist("sabaton")), lastPlayed().loaded())
+    }
+
+    @Test
     fun hasNothingBeforeAnythingIsSaved() {
         assertNull(lastPlayed().loaded())
     }

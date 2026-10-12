@@ -26,23 +26,23 @@ import com.sharkula.gusle.ui.theme.seedColorScheme
 
 private data class Source(@DrawableRes val icon: Int, @StringRes val label: Int)
 
-// Shown on Home but not available until after v1.
+// Shown on Home but not available yet.
 private val laterSources = listOf(
-    Source(R.drawable.ic_queue_music, R.string.playlists),
     Source(R.drawable.ic_album, R.string.albums),
-    Source(R.drawable.ic_person, R.string.artists),
-    Source(R.drawable.ic_folder, R.string.folders),
+    Source(R.drawable.ic_queue_music, R.string.playlists),
 )
 
 @Composable
 fun HomeScreen(
     songCount: Int,
+    artistCount: Int,
     /** The player's song, playing or paused, shown on top; null when there's none. */
     playing: Song?,
     isPlaying: Boolean,
     /** The song on top was tapped. */
     onPlaying: () -> Unit,
     onAllSongs: () -> Unit,
+    onArtists: () -> Unit,
     onSettings: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -94,6 +94,22 @@ fun HomeScreen(
                 secondaryLabel = { Text(pluralStringResource(R.plurals.song_count, songCount, songCount)) },
             )
         }
+        item(key = "artists") {
+            ListButton(
+                onClick = onArtists,
+                transformationSpec = transformationSpec,
+                colors = ButtonDefaults.filledTonalButtonColors(),
+                icon = {
+                    IconCircle(
+                        icon = R.drawable.ic_person,
+                        background = colors.secondaryContainer,
+                        tint = colors.onSecondaryContainer,
+                    )
+                },
+                label = { Text(stringResource(R.string.artists)) },
+                secondaryLabel = { Text(pluralStringResource(R.plurals.artist_count, artistCount, artistCount)) },
+            )
+        }
         items(laterSources, key = { it.label }) { source ->
             ListButton(
                 onClick = {},
@@ -118,7 +134,16 @@ fun HomeScreen(
 @Composable
 private fun HomeScreenPreview() {
     GusleTheme {
-        HomeScreen(songCount = 51, playing = null, isPlaying = false, onPlaying = {}, onAllSongs = {}, onSettings = {})
+        HomeScreen(
+            songCount = 51,
+            artistCount = 6,
+            playing = null,
+            isPlaying = false,
+            onPlaying = {},
+            onAllSongs = {},
+            onArtists = {},
+            onSettings = {},
+        )
     }
 }
 
@@ -129,7 +154,16 @@ private val previewSong = Song(1, Uri.EMPTY, "River at Dawn", "Test Ensemble", 2
 @Composable
 private fun HomeScreenPlayingPreview() {
     GusleTheme {
-        HomeScreen(songCount = 51, playing = previewSong, isPlaying = true, onPlaying = {}, onAllSongs = {}, onSettings = {})
+        HomeScreen(
+            songCount = 51,
+            artistCount = 6,
+            playing = previewSong,
+            isPlaying = true,
+            onPlaying = {},
+            onAllSongs = {},
+            onArtists = {},
+            onSettings = {},
+        )
     }
 }
 
@@ -138,6 +172,15 @@ private fun HomeScreenPlayingPreview() {
 @Composable
 private fun HomeScreenPlayingCoverPreview() {
     GusleTheme(colorScheme = seedColorScheme(0xFF93291C.toInt())) {
-        HomeScreen(songCount = 51, playing = previewSong, isPlaying = true, onPlaying = {}, onAllSongs = {}, onSettings = {})
+        HomeScreen(
+            songCount = 51,
+            artistCount = 6,
+            playing = previewSong,
+            isPlaying = true,
+            onPlaying = {},
+            onAllSongs = {},
+            onArtists = {},
+            onSettings = {},
+        )
     }
 }

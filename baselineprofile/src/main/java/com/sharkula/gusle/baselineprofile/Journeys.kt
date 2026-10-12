@@ -22,6 +22,11 @@ private const val FirstSong = "Mountain Song"
 private val NextSongs = listOf("No Cover Here", "Northern Harbor")
 private const val LongTitle = "A Very Long Song Title That Runs Well Past the Edge of the Round Screen"
 
+// In Artists, Test Trio comes third, after Test Choir and Test Ensemble. Old Meadow (Opus, cover) is
+// in the middle of their songs, A–Z.
+private const val Artist = "Test Trio"
+private const val ArtistsSong = "Old Meadow"
+
 /** How long to wait for something to come on the screen. */
 private const val WaitMs = 10_000L
 
@@ -84,9 +89,9 @@ private fun MacrobenchmarkScope.tapFirstSong() {
 
 /**
  * Every screen, from Home, as a person uses them: All songs scrolled and a song played, the next
- * songs, the Queue scrolled and a song played from it, back to Home with its playing song,
- * Settings with About, Stop playing, and another theme. It ends with nothing playing, so no music
- * plays on between runs, and in walnut.
+ * songs, the Queue scrolled and a song played from it, back to Home with its playing song, an
+ * artist's song played from Artists, Settings with About, Stop playing, and another theme. It ends
+ * with nothing playing, so no music plays on between runs, and in walnut.
  */
 fun MacrobenchmarkScope.useEveryScreen() {
     tap("All songs")
@@ -130,12 +135,36 @@ fun MacrobenchmarkScope.useEveryScreen() {
     waitFor(LongTitle)
     Thread.sleep(2_000)
 
+    // Artists, with the playing song's artist marked, and an artist's songs, one of them played.
+    scrollToAndTap("Artists", down = true)
+    waitFor("Test Choir")
+    scrollToAndTap(Artist, down = true)
+    waitFor("Shuffle all")
+    scrollToAndTap(ArtistsSong, down = true)
+    waitFor("Pause")
+    waitFor(ArtistsSong)
+    Thread.sleep(2_500)
+    // After each back, it waits for the screen that closes to be gone, by something only it shows,
+    // and for the one below to be still: the artist's songs, with the one playing marked, then
+    // Artists, then Home.
+    pressBack()
+    waitUntilGone("Next song")
+    waitUntilStill(ArtistsSong)
+    Thread.sleep(1_000)
+    pressBack()
+    waitUntilGone(ArtistsSong)
+    waitUntilStill(Artist)
+    pressBack()
+    waitUntilGone("Test Trio feat. Test Choir")
+    waitUntilStill("All songs")
+
     // Settings is the edge button at the end of Home.
     repeat(2) { drag(down = true) }
     tap("Settings")
     // Below Stop playing, Theme and Rescan music: at the end of the list, which can't bring it up to
-    // the middle of the screen.
-    waitFor("Rescan music")
+    // the middle of the screen. Dragged there once the screen has slid in: a drag while it slid in
+    // once didn't scroll it.
+    waitUntilStill("Rescan music")
     drag(down = true)
     tap("About")
     waitFor("Plays the music stored on your watch.")
@@ -171,7 +200,7 @@ private fun MacrobenchmarkScope.useThemes() {
         waitFor(theme)
         pressBack()
         // Home, still at its end.
-        waitFor("Folders")
+        waitFor("Playlists")
         Thread.sleep(1_000)
     }
 }
@@ -224,16 +253,29 @@ private fun MacrobenchmarkScope.waitFor(label: String): Rect {
 
 /** Taps [label] once it's still: it moves while its screen slides in. */
 private fun MacrobenchmarkScope.tap(label: String) {
+    tap(waitUntilStill(label))
+}
+
+/** Waits for [label] to be on the screen and still (its screen has slid in); returns where it is. */
+private fun MacrobenchmarkScope.waitUntilStill(label: String): Rect {
     val until = SystemClock.uptimeMillis() + WaitMs
     var last = waitFor(label)
     while (true) {
         Thread.sleep(PollMs)
         val now = waitFor(label)
-        if (now == last) break
+        if (now == last) return now
         check(SystemClock.uptimeMillis() < until) { "\"$label\" doesn't stop moving" }
         last = now
     }
-    tap(last)
+}
+
+/** Waits for [label] to leave the screen, e.g. as its screen closes. */
+private fun MacrobenchmarkScope.waitUntilGone(label: String) {
+    val until = SystemClock.uptimeMillis() + WaitMs
+    while (find(label) != null) {
+        check(SystemClock.uptimeMillis() < until) { "\"$label\" stays on the screen" }
+        Thread.sleep(PollMs)
+    }
 }
 
 private fun MacrobenchmarkScope.tap(bounds: Rect) {

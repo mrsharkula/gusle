@@ -10,7 +10,8 @@ import kotlinx.coroutines.async
 
 /**
  * A queue as the player had it: its songs by [com.sharkula.gusle.data.Song.id] in the player's
- * order (A–Z), the order they play in while shuffled, and where it was.
+ * order (e.g. A–Z), the order they play in while shuffled, where it was, and where its songs came
+ * from.
  */
 data class SavedQueue(
     val songIds: List<Long>,
@@ -19,8 +20,14 @@ data class SavedQueue(
     /** The index in [songIds] of the song it was on. */
     val current: Int,
     val positionMs: Long,
+    /** Where the songs came from; All songs in a queue saved before Gusle kept it. */
+    val source: QueueSource = QueueSource.AllSongs,
 ) {
     val currentSongId: Long get() = songIds[current]
+
+    /** Whether [other] has the same songs, orders and source: all but where it is. */
+    fun sameSongsAs(other: SavedQueue): Boolean =
+        songIds == other.songIds && shuffleOrder == other.shuffleOrder && source == other.source
 
     /**
      * This queue with only the songs [isThere] (still on the watch), in the same orders, or null if
@@ -47,16 +54,24 @@ data class SavedQueue(
             shuffleOrder = shuffleOrder?.let { playOrderLeft.map { newIndex[it] } },
             current = newCurrent,
             positionMs = if (stays) positionMs else 0,
+            source = source,
         )
     }
 
     companion object {
         /**
          * The queue stored as [songIds] and [shuffleOrder] (numbers joined by [joinedNumbers]), on
-         * [currentSongId] at [positionMs], or null if it doesn't hold together, e.g. when a file is
-         * damaged. A song that isn't in the queue (the two were stored separately) starts it over.
+         * [currentSongId] at [positionMs], from [source], or null if it doesn't hold together, e.g.
+         * when a file is damaged. A song that isn't in the queue (the two were stored separately)
+         * starts it over.
          */
-        fun of(songIds: String?, shuffleOrder: String?, currentSongId: Long, positionMs: Long): SavedQueue? {
+        fun of(
+            songIds: String?,
+            shuffleOrder: String?,
+            currentSongId: Long,
+            positionMs: Long,
+            source: QueueSource = QueueSource.AllSongs,
+        ): SavedQueue? {
             val ids = songIds?.splitNumbers(String::toLongOrNull) ?: return null
             val order = shuffleOrder?.let { it.splitNumbers(String::toIntOrNull) ?: return null }
             if (ids.isEmpty() || positionMs < 0 || (order != null && order.sorted() != ids.indices.toList())) {
@@ -64,9 +79,9 @@ data class SavedQueue(
             }
             val current = ids.indexOf(currentSongId)
             return if (current >= 0) {
-                SavedQueue(ids, order, current, positionMs)
+                SavedQueue(ids, order, current, positionMs, source)
             } else {
-                SavedQueue(ids, order, current = order?.first() ?: 0, positionMs = 0)
+                SavedQueue(ids, order, current = order?.first() ?: 0, positionMs = 0, source)
             }
         }
     }
@@ -83,6 +98,7 @@ private const val QueuePrefs = "last_played_queue"
 private const val PositionPrefs = "last_played_position"
 private const val SongIdsKey = "song_ids"
 private const val ShuffleOrderKey = "shuffle_order"
+private const val SourceKey = "source"
 private const val SongIdKey = "song_id"
 private const val PositionKey = "position_ms"
 
@@ -123,17 +139,22 @@ class LastPlayed internal constructor(openPrefs: (name: String) -> SharedPrefere
         return saved
     }
 
-    /** Keeps [queue], writing only what changed: its songs and their order, or where it is. */
+    /**
+     * Keeps [queue], writing only what changed: its songs, their order and where they came from, or
+     * where it is.
+     */
     @MainThread
     fun save(queue: SavedQueue) {
         val last = saved
         if (queue == last) return
         // Written in the background (apply, not commit).
-        if (last == null || queue.songIds != last.songIds || queue.shuffleOrder != last.shuffleOrder) {
+        if (last == null || !queue.sameSongsAs(last)) {
             queuePrefs.edit {
                 putString(SongIdsKey, queue.songIds.joinedNumbers())
                 // Null removes it.
                 putString(ShuffleOrderKey, queue.shuffleOrder?.joinedNumbers())
+                // Null, for All songs, removes it.
+                putString(SourceKey, queue.source.encoded)
             }
         }
         if (last == null || queue.currentSongId != last.currentSongId || queue.positionMs != last.positionMs) {
@@ -162,6 +183,7 @@ class LastPlayed internal constructor(openPrefs: (name: String) -> SharedPrefere
                 shuffleOrder = queuePrefs.getString(ShuffleOrderKey, null),
                 currentSongId = positionPrefs.getLong(SongIdKey, -1),
                 positionMs = positionPrefs.getLong(PositionKey, 0),
+                source = QueueSource.decode(queuePrefs.getString(SourceKey, null)),
             )
         } catch (e: ClassCastException) {
             // A value of another type, e.g. from an earlier build: nothing to come back to, rather

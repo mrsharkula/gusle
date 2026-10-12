@@ -21,7 +21,7 @@ import org.junit.runner.RunWith
  * in ANDROID_SERIAL. From the project folder (from a terminal, `./gradlew` needs
  * `JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`):
  * ```
- * scripts/push-test-songs.sh --many emulator-5554   # 47 songs, so the lists scroll
+ * scripts/push-test-songs.sh --many emulator-5554   # 53 songs, so the lists scroll
  * adb -s emulator-5554 shell svc power stayon true  # the always-on display gets in the way
  * ANDROID_SERIAL=emulator-5554 ./gradlew :app:generateBaselineProfile
  * ANDROID_SERIAL=emulator-5554 ./gradlew :baselineprofile:connectedBenchmarkReleaseAndroidTest \

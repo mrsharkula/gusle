@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Makes a few test songs like the ones on the watch (Opus and M4A, tagged, some with an embedded
 # cover) and copies them to the Wear OS emulator, into the folder Wear Files uses on the watch.
-# Android indexes them as music on its own. Also adds a few songs that can't be played, which
-# Gusle must skip, and one notification sound, which it must not list.
+# Android indexes them as music on its own. They're in a few albums, some with track and disc
+# numbers, and some have tags the watch's songs may have too: no artist, no album, an artist with
+# "feat.", one spelled in lower case, an album artist other than the song's artist. Also adds a few
+# songs that can't be played, which Gusle must skip, and one notification sound, which it must not
+# list.
 #
 # Usage: scripts/push-test-songs.sh [--many | --remove] [emulator-serial]
 # --many adds 40 more songs, so All songs and the Queue scroll for several screens, as the
@@ -54,16 +57,25 @@ fi
 songs_dir=/sdcard/Download/Received
 sound="/sdcard/Notifications/Test ping.ogg"
 
-# File, format, title, artist, length in seconds, cover (WIDTHxHEIGHT:color, or empty).
-# Lengths only matter for the list; the audio is a quiet tone.
+# File, title, artist, length in seconds, cover (WIDTHxHEIGHT:color, or empty), album, album
+# artist, track number, disc number; an empty tag is left out. Lengths only matter for the list;
+# the audio is a quiet tone.
 songs=(
-    "River at Dawn.opus|River at Dawn|Test Ensemble|211|600x600:0x93291C"
-    "Mountain Song.opus|Mountain Song|Test Ensemble|314|1280x720:0x1C4E93"
-    "Long title.m4a|A Very Long Song Title That Runs Well Past the Edge of the Round Screen|Test Trio|249|600x600:0x2E7D32"
-    "No Cover Here.opus|No Cover Here|Test Trio|125|"
+    # Two discs, so its track order isn't A–Z: Mountain Song, River at Dawn, Zither, Šumadija.
+    "Mountain Song.opus|Mountain Song|Test Ensemble|314|1280x720:0x1C4E93|Morning Songs|Test Ensemble|1|1"
+    "River at Dawn.opus|River at Dawn|Test Ensemble|211|600x600:0x93291C|Morning Songs|Test Ensemble|2|1"
+    # Spelled differently, but Test Ensemble's.
+    "Zither Interlude.m4a|Zither Interlude|test ensemble |12|1280x720:0xC9A227|Morning Songs|Test Ensemble|1|2"
+    "Šumadija.opus|Šumadija|Test Ensemble|90|600x600:0x6A1B9A|Morning Songs|Test Ensemble|2|2"
+    # Test Trio's album, with a song by someone else too, and no disc numbers.
+    "Long title.m4a|A Very Long Song Title That Runs Well Past the Edge of the Round Screen|Test Trio|249|600x600:0x2E7D32|Trio Live|Test Trio|2|"
+    "No Cover Here.opus|No Cover Here|Test Trio feat. Test Choir|125||Trio Live|Test Trio|1|"
+    # Two artists' albums with the same name.
+    "Old Friends.m4a|Old Friends|Test Trio|160|600x600:0x00897B|Greatest Hits|Test Trio|1|"
+    "Harvest Moon.opus|Harvest Moon|Test Choir|175|600x600:0xEF6C00|Greatest Hits|Test Choir|1|"
+    # No album: Android names it after the folder, "Received".
+    "Evening Bell.opus|Evening Bell|Test Choir|95|1280x720:0x4527A0"
     "Untagged song.m4a|||45|"
-    "Zither Interlude.m4a|Zither Interlude|Test Ensemble|12|1280x720:0xC9A227"
-    "Šumadija.opus|Šumadija|Test Ensemble|90|600x600:0x6A1B9A"
 )
 
 # With --many: 40 more songs named from these words, in both formats, every fourth without a cover.
@@ -81,7 +93,7 @@ for first in Quiet Golden Distant Old Silver Wild Little Northern; do
             size=600x600; [ $((i % 3)) = 0 ] && size=1280x720
             cover="$size:${colors[i % ${#colors[@]}]}"
         fi
-        more+=("$title.$format|$title|${artists[i % ${#artists[@]}]}|$((120 + i * 37 % 240))|$cover")
+        more+=("$title.$format|$title|${artists[i % ${#artists[@]}]}|$((120 + i * 37 % 240))|$cover|Gusle test songs")
         i=$((i + 1))
     done
 done
@@ -132,11 +144,15 @@ EOF
 $many && songs+=("${more[@]}")
 
 for song in "${songs[@]}"; do
-    IFS='|' read -r file title artist seconds cover <<<"$song"
+    IFS='|' read -r file title artist seconds cover album album_artist track disc <<<"$song"
     out="$work/$file"
     tags=()
-    [ -n "$title" ] && tags+=(-metadata "title=$title" -metadata "album=Gusle test songs")
+    [ -n "$title" ] && tags+=(-metadata "title=$title")
     [ -n "$artist" ] && tags+=(-metadata "artist=$artist")
+    [ -n "$album" ] && tags+=(-metadata "album=$album")
+    [ -n "$album_artist" ] && tags+=(-metadata "album_artist=$album_artist")
+    [ -n "$track" ] && tags+=(-metadata "track=$track")
+    [ -n "$disc" ] && tags+=(-metadata "disc=$disc")
     tone=(-f lavfi -i "sine=frequency=$((220 + RANDOM % 440)):duration=$seconds,volume=0.1")
 
     jpeg=""

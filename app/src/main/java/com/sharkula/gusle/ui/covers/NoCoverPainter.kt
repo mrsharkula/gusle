@@ -15,8 +15,8 @@ import androidx.compose.ui.unit.Dp
 
 /**
  * Stands in for a song's cover while it loads, or when the song has none: fills its bounds (the
- * image clips them, e.g. to a circle) with [background], and centers a [noteSize] music [note] in
- * them.
+ * image clips them, e.g. to a circle) with [background], and centers a [noteSize] music [note] (or
+ * another icon) in them.
  */
 class NoCoverPainter(
     note: Painter,

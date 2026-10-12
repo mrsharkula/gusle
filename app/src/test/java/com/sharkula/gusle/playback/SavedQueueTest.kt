@@ -6,8 +6,13 @@ import org.junit.Assert.assertSame
 import org.junit.Test
 
 class SavedQueueTest {
-    private fun SavedQueue.storedAndRead() =
-        SavedQueue.of(songIds.joinedNumbers(), shuffleOrder?.joinedNumbers(), currentSongId, positionMs)
+    private fun SavedQueue.storedAndRead() = SavedQueue.of(
+        songIds.joinedNumbers(),
+        shuffleOrder?.joinedNumbers(),
+        currentSongId,
+        positionMs,
+        QueueSource.decode(source.encoded),
+    )
 
     @Test
     fun readsBackWhatWasStored() {
@@ -15,6 +20,10 @@ class SavedQueueTest {
         assertEquals(aToZ, aToZ.storedAndRead())
         val shuffled = SavedQueue(listOf(30L, 12L, 7L), shuffleOrder = listOf(2, 0, 1), current = 2, positionMs = 0)
         assertEquals(shuffled, shuffled.storedAndRead())
+        val artist = SavedQueue(listOf(30L, 12L), null, current = 0, positionMs = 0, QueueSource.Artist("sabaton"))
+        assertEquals(artist, artist.storedAndRead())
+        val noArtist = artist.copy(source = QueueSource.Artist(null))
+        assertEquals(noArtist, noArtist.storedAndRead())
     }
 
     @Test
@@ -53,6 +62,20 @@ class SavedQueueTest {
         assertEquals(
             SavedQueue(listOf(10L, 30L, 40L), shuffleOrder = null, current = 1, positionMs = 5_000),
             queue.keepOnly { it != 20L },
+        )
+    }
+
+    @Test
+    fun keepsWhereTheSongsCameFrom() {
+        val artist = QueueSource.Artist("sabaton")
+        val queue = SavedQueue(listOf(10L, 20L, 30L), shuffleOrder = null, current = 2, positionMs = 5_000, artist)
+        assertEquals(
+            SavedQueue(listOf(10L, 30L), shuffleOrder = null, current = 1, positionMs = 5_000, artist),
+            queue.keepOnly { it != 20L },
+        )
+        assertEquals(
+            SavedQueue(listOf(10L, 20L), shuffleOrder = null, current = 0, positionMs = 0, artist),
+            SavedQueue.of("10,20", null, currentSongId = 9, positionMs = 5_000, artist),
         )
     }
 

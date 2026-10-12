@@ -10,7 +10,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSession.ConnectionResult
 import androidx.media3.session.MediaSession.MediaItemsWithStartPosition
@@ -26,7 +25,6 @@ import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.musicLibrary
 import com.sharkula.gusle.nowPlayingIntent
-import kotlin.random.Random
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -69,6 +67,13 @@ val StopAndForget = SessionCommand("com.sharkula.gusle.STOP_AND_FORGET", Bundle.
 class PlaybackService : MediaSessionService() {
     private val scope = MainScope()
     private var session: MediaSession? = null
+
+    /** The session's player, made as the service starts. */
+    private lateinit var sessionPlayer: SessionPlayer
+
+    /** The same as a Player, whose methods are stable API, unlike ForwardingPlayer's. */
+    private val player: Player get() = sessionPlayer
+
     private val playing get() = (application as GusleApp).playing
     private val lastPlayed get() = (application as GusleApp).lastPlayed
     private val unplayable get() = (application as GusleApp).unplayable
@@ -93,12 +98,13 @@ class PlaybackService : MediaSessionService() {
                     Player.EVENT_IS_PLAYING_CHANGED,
                 )
             ) {
-                save(player)
+                save()
             } else if (events.containsAny(Player.EVENT_TIMELINE_CHANGED, Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED)) {
                 // The timeline also changes as each song loads, which changes nothing worth saving.
-                save(player, onlyNewQueue = true)
+                // Where the songs came from changes only with them.
+                save(onlyNewQueue = true)
             }
-            if (events.contains(Player.EVENT_IS_PLAYING_CHANGED)) saveWhilePlaying(player)
+            if (events.contains(Player.EVENT_IS_PLAYING_CHANGED)) saveWhilePlaying()
         }
     }
 
@@ -119,7 +125,11 @@ class PlaybackService : MediaSessionService() {
             // Keeps playing with the screen off.
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
-        val player: Player = SessionPlayer(exoPlayer, unplayable)
+        sessionPlayer = SessionPlayer(
+            exoPlayer,
+            unplayable,
+            nameOf = { source -> source.name(musicLibrary.songs.value as? Songs.Loaded, resources) },
+        )
         player.addListener(followPlayer)
         val lookup = SongLookup(musicLibrary, lastPlayed, packageName, scope, stopAndForget = { stopAndForget(player) })
         session = MediaSession.Builder(this, player)
@@ -135,9 +145,11 @@ class PlaybackService : MediaSessionService() {
         // anything connects; otherwise once they're read. A command that reaches the player first
         // is newer, so then it stays.
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            val queue = lookup.lastQueue()
-            if (queue != null && player.mediaItemCount == 0) exoPlayer.restore(queue)
+            val queue = lookup.lastQueue()?.takeIf { player.mediaItemCount == 0 } ?: return@launch
+            queue.saved.run { sessionPlayer.restore(queue.items, source, current, positionMs, shuffleOrder) }
         }
+        // Its queue goes by the names the songs give now, e.g. once an artist is spelled another way.
+        scope.launch { musicLibrary.songs.collect { sessionPlayer.nameQueue() } }
         playing.update(player)
     }
 
@@ -186,7 +198,7 @@ class PlaybackService : MediaSessionService() {
         scope.cancel()
         session?.run {
             player.removeListener(followPlayer)
-            save(player)
+            save()
             playing.serviceStopped()
             player.release()
             unplayable.serviceStopped()
@@ -197,13 +209,13 @@ class PlaybackService : MediaSessionService() {
     }
 
     /**
-     * Saves the queue [player] has; with none, the one saved last stays. With [onlyNewQueue], only
-     * if its songs or their order changed.
+     * Saves the queue the player has; with none, the one saved last stays. With [onlyNewQueue], only
+     * if its songs, their order or where they came from changed.
      */
-    private fun save(player: Player, onlyNewQueue: Boolean = false) {
-        val queue = player.savedQueue() ?: return
+    private fun save(onlyNewQueue: Boolean = false) {
+        val queue = player.savedQueue(sessionPlayer.queueSource) ?: return
         val last = lastPlayed.saved
-        if (onlyNewQueue && queue.songIds == last?.songIds && queue.shuffleOrder == last.shuffleOrder) return
+        if (onlyNewQueue && last != null && queue.sameSongsAs(last)) return
         lastPlayed.save(queue)
     }
 
@@ -220,13 +232,13 @@ class PlaybackService : MediaSessionService() {
         pauseAllPlayersAndStopSelf()
     }
 
-    private fun saveWhilePlaying(player: Player) {
+    private fun saveWhilePlaying() {
         savingWhilePlaying?.cancel()
         savingWhilePlaying = if (player.isPlaying) {
             scope.launch {
                 while (true) {
                     delay(SaveEveryMs)
-                    save(player)
+                    save()
                 }
             }
         } else {
@@ -235,8 +247,8 @@ class PlaybackService : MediaSessionService() {
     }
 }
 
-/** The queue this player has, or null if it has none. */
-private fun Player.savedQueue(): SavedQueue? {
+/** The queue this player has, whose songs came from [source], or null if it has none. */
+private fun Player.savedQueue(source: QueueSource): SavedQueue? {
     if (mediaItemCount == 0) return null
     val songIds = List(mediaItemCount) { getMediaItemAt(it).songId ?: return null }
     return SavedQueue(
@@ -245,20 +257,12 @@ private fun Player.savedQueue(): SavedQueue? {
         current = currentMediaItemIndex,
         // After the last song has ended, it comes back from that song's start, not its very end.
         positionMs = if (playbackState == Player.STATE_ENDED) 0 else currentPosition,
+        source = source,
     )
 }
 
 /** A saved queue as far as its songs are still on the watch, with the items that play them. */
 private class RestoredQueue(val saved: SavedQueue, val items: List<MediaItem>)
-
-/** Loads [queue]: its songs, their order (shuffled or not), and the song it was on and where, paused. */
-@OptIn(UnstableApi::class) // setShuffleOrder
-private fun ExoPlayer.restore(queue: RestoredQueue) {
-    setMediaItems(queue.items, queue.saved.current, queue.saved.positionMs)
-    // Setting the songs drew a new shuffle order; the saved one replaces it.
-    queue.saved.shuffleOrder?.let { setShuffleOrder(DefaultShuffleOrder(it.toIntArray(), Random.nextLong())) }
-    shuffleModeEnabled = queue.saved.shuffleOrder != null
-}
 
 /**
  * Lets in Gusle's screens and the system, and turns the song IDs they send into items the player
@@ -320,7 +324,8 @@ private class SongLookup(
         startIndex: Int,
         startPositionMs: Long,
     ): ListenableFuture<MediaItemsWithStartPosition> = withSongs { songs ->
-        val items = mediaItems.toPlayable(songs)
+        // Noting where the songs came from, so the player takes that with them, once they're found.
+        val items = mediaItems.toPlayable(songs).comingFrom(QueueSource.of(mediaItems))
         if (startIndex == C.INDEX_UNSET) {
             MediaItemsWithStartPosition(items, C.INDEX_UNSET, startPositionMs)
         } else {
