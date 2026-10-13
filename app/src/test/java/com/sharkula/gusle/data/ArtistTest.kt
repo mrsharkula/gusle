@@ -80,6 +80,9 @@ class ArtistTest {
     fun songsReadAgainUnchangedAreEqual() {
         val songs = listOf(song("A", "Zora"), song("B", null), song("C", "Alpha"))
         val again = songs.map { it.copy() }
-        assertEquals(Songs.Loaded(songs, groupByArtist(songs, collator)), Songs.Loaded(again, groupByArtist(again, collator)))
+        fun loaded(songs: List<Song>) = groupByArtist(songs, collator).let { artists ->
+            Songs.Loaded(songs, artists, groupByAlbum(songs, artists, collator))
+        }
+        assertEquals(loaded(songs), loaded(again))
     }
 }

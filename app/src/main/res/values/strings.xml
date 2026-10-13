@@ -7,6 +7,10 @@
     <string name="artists">Artists</string>
     <!-- Stands for the artist of the songs without one: in Artists, and as their songs' title. -->
     <string name="unknown_artist">Unknown artist</string>
+    <!-- Stands for the album of the songs without one: in Albums, and as their songs' title. -->
+    <string name="unknown_album">Unknown album</string>
+    <!-- Under an album whose songs are by different artists. -->
+    <string name="various_artists">Various artists</string>
     <string name="settings">Settings</string>
     <string name="permission_title">Play your music</string>
     <string name="permission_text">Gusle needs access to the songs on your watch.</string>
@@ -62,6 +66,10 @@
     <plurals name="artist_count">
         <item quantity="one">%d artist</item>
         <item quantity="other">%d artists</item>
+    </plurals>
+    <plurals name="album_count">
+        <item quantity="one">%d album</item>
+        <item quantity="other">%d albums</item>
     </plurals>
     <plurals name="songs_found">
         <item quantity="one">%d song found</item>

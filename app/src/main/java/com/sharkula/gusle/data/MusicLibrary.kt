@@ -35,15 +35,19 @@ sealed interface Songs {
     data object Failed : Songs
 
     /**
-     * Every song, A–Z by title, and the same songs by artist ([groupByArtist]). Both are read and
-     * grouped together off the main thread, so songs read again unchanged are equal to the last.
+     * Every song, A–Z by title, and the same songs by artist ([groupByArtist]) and by album
+     * ([groupByAlbum]). They're read and grouped together off the main thread, so songs read again
+     * unchanged are equal to the last.
      */
-    data class Loaded(val list: List<Song>, val artists: List<Artist>) : Songs {
+    data class Loaded(val list: List<Song>, val artists: List<Artist>, val albums: List<Album>) : Songs {
         /** The same songs by [Song.id], built the first time it's needed. */
         val byId: Map<Long, Song> by lazy { list.associateBy { it.id } }
 
         /** The [artists] by [Artist.key], made with them. */
         val artistsByKey: Map<String?, Artist> = artists.associateBy { it.key }
+
+        /** The [albums] by [Album.key], made with them. */
+        val albumsByKey: Map<String?, Album> = albums.associateBy { it.key }
     }
 }
 
@@ -74,9 +78,13 @@ class MusicLibrary(context: Context) {
         return scope.launch {
             do {
                 readAgain = false
-                val songs = withContext(Dispatchers.IO) { readSongs() }
+                val songs = withContext(Dispatchers.IO) {
+                    // Songs read again unchanged are the current ones, so nothing redraws. Compared
+                    // here rather than as they're set, which would compare every song on the main
+                    // thread, three times over (as a list, by artist and by album).
+                    readSongs()?.let { read -> _songs.value.takeIf { it == read } ?: read }
+                }
                 when {
-                    // An unchanged list equals the current one, so nothing redraws.
                     songs != null -> _songs.value = songs
                     // A failed read keeps the songs from the last good one, if any; the next
                     // refresh tries again.
@@ -106,7 +114,6 @@ class MusicLibrary(context: Context) {
             MediaStore.Audio.Media.DISPLAY_NAME,
             MediaStore.Audio.Media.DATE_MODIFIED,
             MediaStore.Audio.Media.ALBUM,
-            MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.ALBUM_ARTIST,
             MediaStore.Audio.Media.TRACK,
             MediaStore.Audio.Media.RELATIVE_PATH,
@@ -123,18 +130,12 @@ class MusicLibrary(context: Context) {
                 val fileName = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
                 val modified = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
                 val album = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-                val albumId = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
                 val albumArtist = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ARTIST)
                 val track = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
                 val folder = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
                 buildList<Song>(cursor.count) {
                     while (cursor.moveToNext()) {
                         val songId = cursor.getLong(id)
-                        // MediaStore names the album after the song's folder when there's no album
-                        // tag, e.g. "Received" for every such song sent with Wear Files. An album
-                        // tagged with its folder's name can't be told from that, and counts as none.
-                        val albumName = cursor.getString(album).known()
-                            ?.takeIf { it != cursor.getString(folder)?.folderName() }
                         add(
                             Song(
                                 id = songId,
@@ -147,8 +148,12 @@ class MusicLibrary(context: Context) {
                                 artist = cursor.getString(artist).known(),
                                 durationMs = cursor.getLong(duration),
                                 fileModified = cursor.getLong(modified),
-                                album = albumName,
-                                albumId = if (albumName != null) cursor.getLong(albumId) else null,
+                                // MediaStore names the album after the song's folder when there's
+                                // no album tag, e.g. "Received" for every such song sent with Wear
+                                // Files. An album tagged with its folder's name can't be told from
+                                // that, and counts as none.
+                                album = cursor.getString(album).known()
+                                    ?.takeIf { it != cursor.getString(folder)?.folderName() },
                                 albumArtist = cursor.getString(albumArtist).known(),
                                 // 0 when there's none.
                                 track = cursor.getInt(track).takeIf { it > 0 },
@@ -173,7 +178,8 @@ class MusicLibrary(context: Context) {
                     .thenBy { it.second.id },
             )
             .map { it.second }
-        return Songs.Loaded(sorted, groupByArtist(sorted, collator))
+        val artists = groupByArtist(sorted, collator)
+        return Songs.Loaded(sorted, artists, groupByAlbum(sorted, artists, collator))
     }
 
     /** Null for a blank tag, or the "<unknown>" MediaStore may fill in for one that's missing. */

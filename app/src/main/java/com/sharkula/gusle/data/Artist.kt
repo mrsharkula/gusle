@@ -20,10 +20,16 @@ private val Spaces = Regex("[\\s\\p{Z}]+")
 private fun tidy(name: String) = name.trim().replace(Spaces, " ")
 
 /**
- * What an artist is known by. Tags that differ only in case or spaces, e.g. "sabaton" and
- * "Sabaton ", are one artist's. Anything else is an artist of its own: "A feat. B" isn't "A".
+ * [name] as Gusle tells names apart: tidied and in lower case, so tags that differ only in case or
+ * spaces, e.g. "sabaton" and "Sabaton ", are one name. It has no line breaks.
  */
-fun artistKey(name: String): String = tidy(name).lowercase(Locale.ROOT)
+fun nameKey(name: String): String = tidy(name).lowercase(Locale.ROOT)
+
+/**
+ * What an artist is known by ([nameKey]). Anything but case or spaces makes an artist of its own:
+ * "A feat. B" isn't "A".
+ */
+fun artistKey(name: String): String = nameKey(name)
 
 /**
  * The [songs] by artist: A–Z by name with [collator], each artist's songs in the same order as
@@ -33,16 +39,17 @@ fun groupByArtist(songs: List<Song>, collator: Collator): List<Artist> {
     val byKey = LinkedHashMap<String?, MutableList<Song>>()
     for (song in songs) byKey.getOrPut(song.artist?.let(::artistKey)) { ArrayList() } += song
     val unknown = byKey.remove(null)
-    val named = byKey.values.map { Artist(spelling(it), it) }
+    val named = byKey.values.map { Artist(mostCommonSpelling(it.map { song -> song.artist!! }), it) }
         .sortedWith(compareBy(collator) { artist: Artist -> artist.name }.thenBy { it.key })
     return if (unknown == null) named else named + Artist(null, unknown)
 }
 
 /**
- * The name for an artist with [songs]: the way most of them spell it, or of those spelled as often,
- * the one that comes first by character code, which puts capitals first ("Sabaton", not "sabaton").
+ * One name for what [names] call the same thing, e.g. an artist's songs their artist: the way most
+ * of them spell it, without extra spaces, or of those spelled as often, the one that comes first by
+ * character code, which puts capitals first ("Sabaton", not "sabaton").
  */
-private fun spelling(songs: List<Song>): String =
-    songs.groupingBy { tidy(it.artist!!) }.eachCount()
+internal fun mostCommonSpelling(names: List<String>): String =
+    names.groupingBy(::tidy).eachCount()
         .entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
         .first().key

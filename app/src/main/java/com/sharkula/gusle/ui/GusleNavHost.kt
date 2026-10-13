@@ -27,6 +27,7 @@ import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.playback.QueueSource
 import com.sharkula.gusle.playingSong
 import com.sharkula.gusle.themeChoice
+import com.sharkula.gusle.ui.albums.AlbumsScreen
 import com.sharkula.gusle.ui.artists.ArtistsScreen
 import com.sharkula.gusle.ui.covers.SongCover
 import com.sharkula.gusle.ui.covers.playingSongColors
@@ -62,6 +63,16 @@ sealed interface Screen : NavKey {
      */
     @Serializable
     data class Artist(val key: String?) : Screen
+
+    @Serializable
+    data object Albums : Screen
+
+    /**
+     * An album's songs, by the album's [com.sharkula.gusle.data.Album.key]: null for the songs
+     * without an album.
+     */
+    @Serializable
+    data class Album(val key: String?) : Screen
 
     @Serializable
     data object NowPlaying : Screen
@@ -153,10 +164,16 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
             }
         }
     }
-    // An artist whose songs are all gone when they're read anew closes, wherever it is in the stack,
-    // rather than showing no songs; so does one the stack was saved with.
+    // An artist or album whose songs are all gone when they're read anew closes, wherever it is in
+    // the stack, rather than showing no songs; so does one the stack was saved with.
     LaunchedEffect(songs) {
-        backStack.removeAll { it is Screen.Artist && it.key !in songs.artistsByKey }
+        backStack.removeAll { screen ->
+            when (screen) {
+                is Screen.Artist -> screen.key !in songs.artistsByKey
+                is Screen.Album -> screen.key !in songs.albumsByKey
+                else -> false
+            }
+        }
     }
     val player = rememberPlayerConnection()
 
@@ -186,6 +203,24 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
         )
     }
 
+    /**
+     * The songs of a [group] of them, e.g. an artist, under its [title], as songs from [source]. Once
+     * the group's songs are all gone, its screen closes (see above) showing what it showed, rather
+     * than nothing; one the stack was saved with has nothing to show meanwhile.
+     */
+    @Composable
+    fun <G : Any> GroupSongs(
+        group: G?,
+        title: @Composable (G) -> String,
+        source: QueueSource,
+        songsOf: (G) -> List<Song>,
+    ) {
+        val shown = lastNotNull(group) ?: return
+        PlayingSongTheme(songs) { playing, isPlaying ->
+            SongList(title(shown), source, songsOf(shown), playing = playing, isPlaying = isPlaying)
+        }
+    }
+
     NavDisplay(
         backStack = backStack,
         onBack = {
@@ -202,12 +237,15 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                         songCount = songs.list.size,
                         // The songs without an artist aren't an artist's.
                         artistCount = songs.artists.count { it.name != null },
+                        // Nor the songs without an album an album.
+                        albumCount = songs.albums.count { it.name != null },
                         playing = playing,
                         isPlaying = isPlaying,
                         // It goes on as it is.
                         onPlaying = { go(Screen.NowPlaying) },
                         onAllSongs = { go(Screen.AllSongs) },
                         onArtists = { go(Screen.Artists) },
+                        onAlbums = { go(Screen.Albums) },
                         onSettings = { go(Screen.Settings) },
                     )
                 }
@@ -234,20 +272,30 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                 }
             }
             entry<Screen.Artist>(metadata = { slidesIn(it) }) { screen ->
-                // When their songs are all gone, the screen closes (see above) showing what it
-                // showed, rather than nothing. One the stack was saved with has nothing to show.
-                val artist = lastNotNull(songs.artistsByKey[screen.key])
-                if (artist != null) {
-                    PlayingSongTheme(songs) { playing, isPlaying ->
-                        SongList(
-                            title = artist.name ?: stringResource(R.string.unknown_artist),
-                            source = QueueSource.Artist(screen.key),
-                            list = artist.songs,
-                            playing = playing,
-                            isPlaying = isPlaying,
-                        )
-                    }
+                GroupSongs(
+                    songs.artistsByKey[screen.key],
+                    title = { it.name ?: stringResource(R.string.unknown_artist) },
+                    source = QueueSource.Artist(screen.key),
+                    songsOf = { it.songs },
+                )
+            }
+            entry<Screen.Albums>(metadata = slidesIn(Screen.Albums)) {
+                PlayingSongTheme(songs) { playing, isPlaying ->
+                    AlbumsScreen(
+                        songs.albums,
+                        playing = playing,
+                        isPlaying = isPlaying,
+                        onAlbum = { go(Screen.Album(it.key)) },
+                    )
                 }
+            }
+            entry<Screen.Album>(metadata = { slidesIn(it) }) { screen ->
+                GroupSongs(
+                    songs.albumsByKey[screen.key],
+                    title = { it.name ?: stringResource(R.string.unknown_album) },
+                    source = QueueSource.Album(screen.key),
+                    songsOf = { it.songs },
+                )
             }
             entry<Screen.NowPlaying>(metadata = slidesIn(Screen.NowPlaying)) {
                 NowPlayingScreen(player, songs.byId, onQueue = { go(Screen.Queue) })

@@ -6,6 +6,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.sharkula.gusle.R
 import com.sharkula.gusle.data.Songs
+import com.sharkula.gusle.data.albumNameIn
 
 /**
  * Where a queue's songs came from, as it's kept with them: what it is, not what it's called, so the
@@ -18,12 +19,16 @@ sealed interface QueueSource {
     /** An artist's songs, by [com.sharkula.gusle.data.Artist.key]; null for the songs without an artist. */
     data class Artist(val key: String?) : QueueSource
 
+    /** An album's songs, by [com.sharkula.gusle.data.Album.key]; null for the songs without an album. */
+    data class Album(val key: String?) : QueueSource
+
     /** As it's saved and sent; null for [AllSongs]. */
     val encoded: String?
         get() = when (this) {
             AllSongs -> null
-            // No artist's key is empty, so the songs without one can have that.
+            // No artist's or album's key is empty, so the songs without one can have that.
             is Artist -> ArtistPrefix + key.orEmpty()
+            is Album -> AlbumPrefix + key.orEmpty()
         }
 
     companion object {
@@ -31,6 +36,7 @@ sealed interface QueueSource {
         fun decode(encoded: String?): QueueSource = when {
             encoded == null -> AllSongs
             encoded.startsWith(ArtistPrefix) -> Artist(encoded.removePrefix(ArtistPrefix).ifEmpty { null })
+            encoded.startsWith(AlbumPrefix) -> Album(encoded.removePrefix(AlbumPrefix).ifEmpty { null })
             else -> AllSongs
         }
 
@@ -41,6 +47,7 @@ sealed interface QueueSource {
 }
 
 private const val ArtistPrefix = "artist:"
+private const val AlbumPrefix = "album:"
 private const val SourceKey = "com.sharkula.gusle.QUEUE_SOURCE"
 
 /**
@@ -63,14 +70,18 @@ fun List<MediaItem>.comingFrom(source: QueueSource): List<MediaItem> {
 val Player.queueName: String? get() = playlistMetadata.title?.toString()
 
 /**
- * What the Queue and the watch's media controls call this source: "All songs", "Unknown artist", or
- * the artist's name as their [songs] spell it now. An artist no longer among them, e.g. after their
- * songs were tagged anew, goes by their key.
+ * What the Queue and the watch's media controls call this source: "All songs", the artist's or the
+ * album's name as the [songs] spell it now, or "Unknown artist" or "Unknown album". An artist or
+ * album no longer among them, e.g. after their songs were tagged anew, goes by the name in its key.
  */
 fun QueueSource.name(songs: Songs.Loaded?, resources: Resources): String = when (this) {
     QueueSource.AllSongs -> resources.getString(R.string.all_songs)
     is QueueSource.Artist -> when (key) {
         null -> resources.getString(R.string.unknown_artist)
         else -> songs?.artistsByKey?.get(key)?.name ?: key
+    }
+    is QueueSource.Album -> when (key) {
+        null -> resources.getString(R.string.unknown_album)
+        else -> songs?.albumsByKey?.get(key)?.name ?: albumNameIn(key)
     }
 }

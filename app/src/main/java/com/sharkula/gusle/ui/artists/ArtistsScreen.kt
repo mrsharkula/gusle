@@ -5,22 +5,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.sharkula.gusle.R
 import com.sharkula.gusle.data.Artist
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.artistKey
-import com.sharkula.gusle.ui.components.ListScreen
-import com.sharkula.gusle.ui.covers.SongCover
-import com.sharkula.gusle.ui.covers.rememberRowNoCoverPainter
-import com.sharkula.gusle.ui.songs.CoverRow
+import com.sharkula.gusle.ui.songs.SongGroupsScreen
 import com.sharkula.gusle.ui.theme.GusleTheme
 
 /**
  * The [artists] A–Z, each with how many songs they have, and "Unknown artist" last for the songs
- * without one. The artist of the player's song is marked like the song itself, so the way back to
- * it is easy to find.
+ * without one. The artist of the player's song is marked like the song itself.
  */
 @Composable
 fun ArtistsScreen(
@@ -30,28 +25,24 @@ fun ArtistsScreen(
     isPlaying: Boolean,
     onArtist: (Artist) -> Unit,
 ) {
-    val noCover = rememberRowNoCoverPainter(R.drawable.ic_person)
     val unknownArtist = stringResource(R.string.unknown_artist)
     // Null for the songs without an artist, as for their row.
     val playingKey = playing?.artist?.let(::artistKey)
 
-    ListScreen(title = stringResource(R.string.artists)) { transformationSpec ->
+    SongGroupsScreen(
+        title = stringResource(R.string.artists),
+        groups = artists,
         // No artist's key is empty, so the songs without one can have that.
-        items(artists, key = { it.key.orEmpty() }, contentType = { "artist" }) { artist ->
-            // Null for every row but the player's song's artist's, as in a song list.
-            val isPlayingHere = if (playing != null && artist.key == playingKey) isPlaying else null
-            CoverRow(
-                // The cover of their first song, A–Z.
-                SongCover(artist.songs.first()),
-                label = artist.name ?: unknownArtist,
-                secondaryLabel = pluralStringResource(R.plurals.song_count, artist.songs.size, artist.songs.size),
-                isPlaying = isPlayingHere,
-                noCover = noCover,
-                transformationSpec = transformationSpec,
-                onClick = { onArtist(artist) },
-            )
-        }
-    }
+        key = { it.key.orEmpty() },
+        // Their first song's, A–Z.
+        coverOf = { it.songs.first() },
+        label = { it.name ?: unknownArtist },
+        secondaryLabel = { pluralStringResource(R.plurals.song_count, it.songs.size, it.songs.size) },
+        noCoverIcon = R.drawable.ic_person,
+        hasPlayingSong = { playing != null && it.key == playingKey },
+        isPlaying = isPlaying,
+        onGroup = onArtist,
+    )
 }
 
 private val previewArtists = listOf(

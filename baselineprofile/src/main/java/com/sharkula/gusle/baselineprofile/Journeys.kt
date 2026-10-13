@@ -27,6 +27,12 @@ private const val LongTitle = "A Very Long Song Title That Runs Well Past the Ed
 private const val Artist = "Test Trio"
 private const val ArtistsSong = "Old Meadow"
 
+// In Albums, Morning Songs comes after the two Greatest Hits and the three Gusle test songs (one per
+// artist). Zither Interlude (M4A, wide cover) is its third song in track order, the first on its
+// second disc.
+private const val AlbumName = "Morning Songs"
+private const val AlbumsSong = "Zither Interlude"
+
 /** How long to wait for something to come on the screen. */
 private const val WaitMs = 10_000L
 
@@ -90,8 +96,8 @@ private fun MacrobenchmarkScope.tapFirstSong() {
 /**
  * Every screen, from Home, as a person uses them: All songs scrolled and a song played, the next
  * songs, the Queue scrolled and a song played from it, back to Home with its playing song, an
- * artist's song played from Artists, Settings with About, Stop playing, and another theme. It ends
- * with nothing playing, so no music plays on between runs, and in walnut.
+ * artist's song played from Artists and an album's from Albums, Settings with About, Stop playing,
+ * and another theme. It ends with nothing playing, so no music plays on between runs, and in walnut.
  */
 fun MacrobenchmarkScope.useEveryScreen() {
     tap("All songs")
@@ -156,6 +162,27 @@ fun MacrobenchmarkScope.useEveryScreen() {
     waitUntilStill(Artist)
     pressBack()
     waitUntilGone("Test Trio feat. Test Choir")
+    waitUntilStill("All songs")
+
+    // Albums, with the playing song's album marked, and an album's songs, one of them played; back
+    // the same way.
+    scrollToAndTap("Albums", down = true)
+    waitFor("Greatest Hits")
+    scrollToAndTap(AlbumName, down = true)
+    waitFor("Shuffle all")
+    scrollToAndTap(AlbumsSong, down = true)
+    waitFor("Pause")
+    waitFor(AlbumsSong)
+    Thread.sleep(2_500)
+    pressBack()
+    waitUntilGone("Next song")
+    waitUntilStill(AlbumsSong)
+    Thread.sleep(1_000)
+    pressBack()
+    waitUntilGone(AlbumsSong)
+    waitUntilStill(AlbumName)
+    pressBack()
+    waitUntilGone("Gusle test songs")
     waitUntilStill("All songs")
 
     // Settings is the edge button at the end of Home.

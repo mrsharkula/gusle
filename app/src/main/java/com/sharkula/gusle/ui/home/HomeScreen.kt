@@ -7,12 +7,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumnItemScope
 import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.EdgeButtonSize
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.lazy.TransformationSpec
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.sharkula.gusle.R
 import com.sharkula.gusle.data.Song
@@ -28,7 +30,6 @@ private data class Source(@DrawableRes val icon: Int, @StringRes val label: Int)
 
 // Shown on Home but not available yet.
 private val laterSources = listOf(
-    Source(R.drawable.ic_album, R.string.albums),
     Source(R.drawable.ic_queue_music, R.string.playlists),
 )
 
@@ -36,6 +37,7 @@ private val laterSources = listOf(
 fun HomeScreen(
     songCount: Int,
     artistCount: Int,
+    albumCount: Int,
     /** The player's song, playing or paused, shown on top; null when there's none. */
     playing: Song?,
     isPlaying: Boolean,
@@ -43,9 +45,9 @@ fun HomeScreen(
     onPlaying: () -> Unit,
     onAllSongs: () -> Unit,
     onArtists: () -> Unit,
+    onAlbums: () -> Unit,
     onSettings: () -> Unit,
 ) {
-    val colors = MaterialTheme.colorScheme
     val laterColors = ButtonDefaults.filledTonalButtonColors()
 
     ListScreen(
@@ -75,39 +77,31 @@ fun HomeScreen(
         }
         // The highlighted row, unless the playing song is on top: then it's a row like the rest.
         item(key = "all songs") {
-            ListButton(
+            SourceButton(
+                icon = R.drawable.ic_music_note,
+                label = stringResource(R.string.all_songs),
+                count = pluralStringResource(R.plurals.song_count, songCount, songCount),
                 onClick = onAllSongs,
                 transformationSpec = transformationSpec,
-                colors = if (playing == null) {
-                    ButtonDefaults.filledVariantButtonColors()
-                } else {
-                    ButtonDefaults.filledTonalButtonColors()
-                },
-                icon = {
-                    IconCircle(
-                        icon = R.drawable.ic_music_note,
-                        background = if (playing == null) colors.primary else colors.secondaryContainer,
-                        tint = if (playing == null) colors.onPrimary else colors.onSecondaryContainer,
-                    )
-                },
-                label = { Text(stringResource(R.string.all_songs)) },
-                secondaryLabel = { Text(pluralStringResource(R.plurals.song_count, songCount, songCount)) },
+                highlighted = playing == null,
             )
         }
         item(key = "artists") {
-            ListButton(
+            SourceButton(
+                icon = R.drawable.ic_person,
+                label = stringResource(R.string.artists),
+                count = pluralStringResource(R.plurals.artist_count, artistCount, artistCount),
                 onClick = onArtists,
                 transformationSpec = transformationSpec,
-                colors = ButtonDefaults.filledTonalButtonColors(),
-                icon = {
-                    IconCircle(
-                        icon = R.drawable.ic_person,
-                        background = colors.secondaryContainer,
-                        tint = colors.onSecondaryContainer,
-                    )
-                },
-                label = { Text(stringResource(R.string.artists)) },
-                secondaryLabel = { Text(pluralStringResource(R.plurals.artist_count, artistCount, artistCount)) },
+            )
+        }
+        item(key = "albums") {
+            SourceButton(
+                icon = R.drawable.ic_album,
+                label = stringResource(R.string.albums),
+                count = pluralStringResource(R.plurals.album_count, albumCount, albumCount),
+                onClick = onAlbums,
+                transformationSpec = transformationSpec,
             )
         }
         items(laterSources, key = { it.label }) { source ->
@@ -130,6 +124,40 @@ fun HomeScreen(
     }
 }
 
+/**
+ * A source of songs on Home, e.g. Artists: its [icon] in a circle, its [label], and how many there
+ * are ([count]). [highlighted] stands out in the primary color.
+ */
+@Composable
+private fun TransformingLazyColumnItemScope.SourceButton(
+    @DrawableRes icon: Int,
+    label: String,
+    count: String,
+    onClick: () -> Unit,
+    transformationSpec: TransformationSpec,
+    highlighted: Boolean = false,
+) {
+    val colors = MaterialTheme.colorScheme
+    ListButton(
+        onClick = onClick,
+        transformationSpec = transformationSpec,
+        colors = if (highlighted) {
+            ButtonDefaults.filledVariantButtonColors()
+        } else {
+            ButtonDefaults.filledTonalButtonColors()
+        },
+        icon = {
+            IconCircle(
+                icon = icon,
+                background = if (highlighted) colors.primary else colors.secondaryContainer,
+                tint = if (highlighted) colors.onPrimary else colors.onSecondaryContainer,
+            )
+        },
+        label = { Text(label) },
+        secondaryLabel = { Text(count) },
+    )
+}
+
 @Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true)
 @Composable
 private fun HomeScreenPreview() {
@@ -137,11 +165,13 @@ private fun HomeScreenPreview() {
         HomeScreen(
             songCount = 51,
             artistCount = 6,
+            albumCount = 35,
             playing = null,
             isPlaying = false,
             onPlaying = {},
             onAllSongs = {},
             onArtists = {},
+            onAlbums = {},
             onSettings = {},
         )
     }
@@ -157,11 +187,13 @@ private fun HomeScreenPlayingPreview() {
         HomeScreen(
             songCount = 51,
             artistCount = 6,
+            albumCount = 35,
             playing = previewSong,
             isPlaying = true,
             onPlaying = {},
             onAllSongs = {},
             onArtists = {},
+            onAlbums = {},
             onSettings = {},
         )
     }
@@ -175,11 +207,13 @@ private fun HomeScreenPlayingCoverPreview() {
         HomeScreen(
             songCount = 51,
             artistCount = 6,
+            albumCount = 35,
             playing = previewSong,
             isPlaying = true,
             onPlaying = {},
             onAllSongs = {},
             onArtists = {},
+            onAlbums = {},
             onSettings = {},
         )
     }
