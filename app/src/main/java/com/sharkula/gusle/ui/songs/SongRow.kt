@@ -16,6 +16,7 @@ import com.sharkula.gusle.R
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.ui.components.Equalizer
 import com.sharkula.gusle.ui.components.ListButton
+import com.sharkula.gusle.ui.components.formatLength
 import com.sharkula.gusle.ui.covers.SongCover
 import com.sharkula.gusle.ui.covers.SongCoverCircle
 import com.sharkula.gusle.ui.covers.rememberRowNoCoverPainter
@@ -97,24 +98,3 @@ fun TransformingLazyColumnItemScope.CoverRow(
 
 /** How long the song is, e.g. 3:31; null rather than "0:00" when MediaStore doesn't know it. */
 val Song.length: String? get() = if (durationMs > 0) formatLength(durationMs) else null
-
-/** 3:31, or 1:02:05 from an hour on. Built by hand: it runs for every row that scrolls in. */
-private fun formatLength(ms: Long): String {
-    val seconds = ms / 1000
-    val hours = seconds / 3600
-    return buildString {
-        if (hours > 0) {
-            append(hours).append(':')
-            appendTwoDigits(seconds / 60 % 60)
-        } else {
-            append(seconds / 60)
-        }
-        append(':')
-        appendTwoDigits(seconds % 60)
-    }
-}
-
-private fun StringBuilder.appendTwoDigits(value: Long) {
-    if (value < 10) append('0')
-    append(value)
-}

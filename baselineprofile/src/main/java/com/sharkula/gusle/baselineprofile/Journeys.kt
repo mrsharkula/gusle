@@ -94,8 +94,8 @@ private fun MacrobenchmarkScope.tapFirstSong() {
 }
 
 /**
- * Every screen, from Home, as a person uses them: All songs scrolled and a song played, the next
- * songs, the Queue scrolled and a song played from it, back to Home with its playing song, an
+ * Every screen, from Home, as a person uses them: All songs scrolled and a song played, seeking in
+ * it, the next songs, the Queue scrolled and a song played from it, back to Home with its playing song, an
  * artist's song played from Artists and an album's from Albums, Settings with About, Stop playing,
  * and another theme. It ends with nothing playing, so no music plays on between runs, and in walnut.
  */
@@ -113,6 +113,7 @@ fun MacrobenchmarkScope.useEveryScreen() {
     waitFor(FirstSong)
     Thread.sleep(4_000)
     changeVolume()
+    seek()
     // Song changes: the next cover, its colors, the transitions.
     for (song in NextSongs) {
         tap("Next song")
@@ -208,6 +209,25 @@ fun MacrobenchmarkScope.useEveryScreen() {
 }
 
 /**
+ * From Now playing, opens the seek screen by the time under the title, turns the crown on through
+ * the song and back, which jumps each time it stops, jumps 10 s on with the button, and goes back.
+ */
+private fun MacrobenchmarkScope.seek() {
+    // Its label has the time in it, e.g. "4 seconds, seek".
+    tap(checkNotNull(find { it.endsWith(", seek") }) { "No time under the title on ${onScreen().map { it.first }}" })
+    waitUntilStill("Forward 10 seconds")
+    // Once the hint has faded.
+    Thread.sleep(3_000)
+    turnCrown(4)
+    turnCrown(-2)
+    tap("Forward 10 seconds")
+    Thread.sleep(1_000)
+    pressBack()
+    waitUntilGone("Forward 10 seconds")
+    waitFor("Pause")
+}
+
+/**
  * From Home with nothing playing, chooses another theme in Settings → Theme, which recolors every
  * screen at once, and goes back through them in it; then chooses walnut again, so the next run
  * starts the same.
@@ -241,11 +261,14 @@ private fun MacrobenchmarkScope.useThemes() {
  * Where a text, a description (e.g. an icon button's) or a state (e.g. the player's song's row's) is
  * on the screen now; null if it isn't.
  */
-private fun MacrobenchmarkScope.find(label: String): Rect? {
+private fun MacrobenchmarkScope.find(label: String): Rect? = find { it == label }
+
+/** Where the first text, description or state that [matches] is on the screen now; null if none is. */
+private fun MacrobenchmarkScope.find(matches: (String) -> Boolean): Rect? {
     fun search(node: AccessibilityNodeInfo): Rect? {
         // False for a node that's gone, e.g. a row scrolled away.
         if (!node.refresh()) return null
-        if (listOf(node.text, node.contentDescription, node.stateDescription).any { it?.toString() == label }) {
+        if (listOf(node.text, node.contentDescription, node.stateDescription).any { it != null && matches(it.toString()) }) {
             return node.boundsInScreen()
         }
         return (0 until node.childCount).asSequence().mapNotNull(node::getChild).firstNotNullOfOrNull(::search)

@@ -74,7 +74,14 @@ class SessionPlayer(
 
     override fun seekToDefaultPosition(mediaItemIndex: Int) = moveOn { super.seekToDefaultPosition(mediaItemIndex) }
 
-    override fun seekTo(mediaItemIndex: Int, positionMs: Long) = moveOn { super.seekTo(mediaItemIndex, positionMs) }
+    override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
+        // Within the song it's on, e.g. from the seek screen, it's still the song Previous went to.
+        if (mediaItemIndex == player.currentMediaItemIndex) {
+            super.seekTo(mediaItemIndex, positionMs)
+        } else {
+            moveOn { super.seekTo(mediaItemIndex, positionMs) }
+        }
+    }
 
     override fun setMediaItems(mediaItems: List<MediaItem>, resetPosition: Boolean) = moveOn {
         queueSource = QueueSource.of(mediaItems)

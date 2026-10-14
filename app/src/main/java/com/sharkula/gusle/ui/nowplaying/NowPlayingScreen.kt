@@ -1,31 +1,29 @@
 package com.sharkula.gusle.ui.nowplaying
 
-import android.graphics.LinearGradient
-import android.graphics.Paint
-import android.graphics.Shader
-import android.net.Uri
 import android.os.SystemClock
-import androidx.annotation.DrawableRes
 import androidx.annotation.OptIn
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -35,68 +33,51 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.center
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.Matrix
-import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shadow as TextShadow
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.painter.BitmapPainter
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.shadow.Shadow
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.VectorGroup
-import androidx.compose.ui.graphics.vector.VectorPath
-import androidx.compose.ui.graphics.vector.toPath
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onVisibilityChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.LocalViewConfiguration
-import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.platform.ViewConfiguration
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -104,15 +85,10 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.core.graphics.applyCanvas
-import androidx.core.graphics.createBitmap
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
-import androidx.media3.ui.compose.state.ProgressStateWithTickInterval
 import androidx.media3.ui.compose.state.rememberCurrentMediaItemState
 import androidx.media3.ui.compose.state.rememberNextButtonState
 import androidx.media3.ui.compose.state.rememberPlayPauseButtonState
@@ -130,25 +106,23 @@ import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.sharkula.gusle.R
-import com.sharkula.gusle.coverColors
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.playback.UnplayableSongs
 import com.sharkula.gusle.playback.songId
+import com.sharkula.gusle.ui.LocalHiddenDepth
+import com.sharkula.gusle.ui.components.formatLength
+import com.sharkula.gusle.ui.components.rememberLengthInWords
 import com.sharkula.gusle.ui.components.rememberMayAnimate
 import com.sharkula.gusle.ui.components.rememberScreenShown
 import com.sharkula.gusle.ui.covers.CoverArt
-import com.sharkula.gusle.ui.covers.NoCoverPainter
-import com.sharkula.gusle.ui.covers.SongCover
+import com.sharkula.gusle.ui.heldWhileHidden
 import com.sharkula.gusle.ui.playback.PlayerConnection
 import com.sharkula.gusle.ui.playback.rememberShownPlayer
 import com.sharkula.gusle.ui.theme.GusleTheme
-import com.sharkula.gusle.ui.theme.LocalAppTheme
-import com.sharkula.gusle.ui.theme.seedColorScheme
 import com.sharkula.gusle.unplayableSongs
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
-import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.delay
@@ -159,23 +133,35 @@ import kotlinx.coroutines.launch
 /**
  * The player: the playing song's cover in the middle, fading into black, its title, the controls
  * and its artist, and its progress along the edge. It follows the player wherever it's controlled
- * from, e.g. the watch's media controls. Swiping left opens the queue ([onQueue]).
+ * from, e.g. the watch's media controls. Swiping left opens the queue ([onQueue]); tapping the time
+ * under the title opens the seek screen ([onSeek]).
  */
 @Composable
-fun NowPlayingScreen(connection: PlayerConnection, songsById: Map<Long, Song>, onQueue: () -> Unit) {
+fun NowPlayingScreen(
+    connection: PlayerConnection,
+    songsById: Map<Long, Song>,
+    onQueue: () -> Unit,
+    onSeek: () -> Unit,
+) {
     val player = connection.rememberShownPlayer()
 
     ScreenScaffold {
         // Just the clock until the player first connects, which takes milliseconds.
         if (player != null) {
-            NowPlaying(connection, player, songsById, onQueue)
+            NowPlaying(connection, player, songsById, onQueue, onSeek)
         }
     }
 }
 
 @OptIn(UnstableApi::class)
 @Composable
-private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: Map<Long, Song>, onQueue: () -> Unit) {
+private fun NowPlaying(
+    connection: PlayerConnection,
+    player: Player,
+    songsById: Map<Long, Song>,
+    onQueue: () -> Unit,
+    onSeek: () -> Unit,
+) {
     val item = rememberCurrentMediaItemState(player)
     val playPause = rememberPlayPauseButtonState(player)
     val previous = rememberPreviousButtonState(player)
@@ -203,15 +189,10 @@ private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: 
     }
     val onNext = remember(connection, next.isEnabled) { command(next.isEnabled) { seekToNext() } }
     val songDurationMs by rememberUpdatedState(song?.durationMs ?: 0)
-
-    // The song's cover and its colors go up together once both are ready; until then the last
-    // ones stay. Opened again on the song shown last, they're up in the first frame.
-    val cover = song?.let(::SongCover)
-    val coverColors = LocalContext.current.coverColors
-    val coverSizePx = coverSizePx()
-    val art by produceState(coverColors.lastArt?.takeIf { it.cover == cover }, cover, coverSizePx) {
-        value = coverColors.art(cover, coverSizePx)
-    }
+    val elapsedMs = remember(progress) { { progress.currentPositionMs } }
+    // Below another screen, e.g. the seek screen, they follow a new song a moment later, as other
+    // hidden screens do, from the art that screen read rather than reading the cover twice at once.
+    val art = rememberCoverArt(heldWhileHidden(song))
 
     NowPlaying(
         // Nothing to play, e.g. when Gusle left the screen before a tap reached the player, and the
@@ -225,6 +206,7 @@ private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: 
         art = art,
         isPlaying = !playPause.showPlay,
         progress = remember(progress) { { progress.fraction(songDurationMs) } },
+        elapsedMs = elapsedMs.takeIf { mediaItem != null },
         animate = animate,
         volume = volume,
         shuffleOn = shuffle.shuffleOn,
@@ -233,6 +215,7 @@ private fun NowPlaying(connection: PlayerConnection, player: Player, songsById: 
         onPlayPause = onPlayPause,
         onNext = onNext,
         onQueue = onQueue,
+        onSeek = onSeek,
     )
 }
 
@@ -261,46 +244,10 @@ private fun rememberCantPlay(shown: State<Boolean>): State<UnplayableSongs.Failu
     }
 }
 
-/** Light on the battery, and still smooth: a step moves the ring a few pixels. */
-private const val ProgressTickMs = 1000L
-
-/**
- * The [player]'s progress, updated once a second while it plays, but only while it's connected
- * and [shown]: media3's rememberProgressStateWithTickInterval goes on ticking in the background.
- */
-@OptIn(UnstableApi::class)
-@Composable
-private fun rememberProgress(
-    connection: PlayerConnection,
-    player: Player,
-    shown: State<Boolean>,
-): ProgressStateWithTickInterval {
-    val scope = rememberCoroutineScope()
-    val progress = remember(player) { ProgressStateWithTickInterval(player, ProgressTickMs, scope) }
-    LaunchedEffect(progress, connection, shown) {
-        // A player let go of reads 0 for everything; its connected successor takes over soon.
-        snapshotFlow { shown.value && connection.isConnected(player) }
-            .collectLatest { live -> if (live) progress.observe() }
-    }
-    return progress
-}
-
-/**
- * How far it is through the song. Until the song is prepared, e.g. when the player comes back to
- * it paused, the player doesn't know its length yet, so it's [songDurationMs] (MediaStore's).
- */
-@OptIn(UnstableApi::class)
-private fun ProgressStateWithTickInterval.fraction(songDurationMs: Long): Float {
-    val duration = durationMs.takeIf { it > 0 } ?: songDurationMs
-    return if (duration > 0) (currentPositionMs.toFloat() / duration).coerceIn(0f, 1f) else 0f
-}
-
-/** The design is drawn for a screen this many dp across: the OnePlus Watch 4's. */
-private const val DesignWidth = 233f
-
 /**
  * The player as drawn in the design, without a player behind it. [progress] is read only while
- * drawing, so its ticks redraw the ring and nothing else.
+ * drawing, and [elapsedMs] only by the time under the title, so their ticks redraw the ring and
+ * compose that time again, and nothing else.
  */
 @Composable
 private fun NowPlaying(
@@ -310,6 +257,8 @@ private fun NowPlaying(
     art: CoverArt?,
     isPlaying: Boolean,
     progress: () -> Float,
+    /** How far the song is, shown under the title; null while there's no song, which shows none. */
+    elapsedMs: (() -> Long)?,
     /**
      * Whether anything may move frame by frame: only while Gusle is on the screen, the screen is
      * on and Reduce motion is off. Otherwise everything stands still in its end state.
@@ -327,8 +276,9 @@ private fun NowPlaying(
     onNext: (() -> Unit)?,
     /** A swipe left; also an accessibility action, as screen readers take swipes for themselves. */
     onQueue: () -> Unit,
+    /** A tap on the time under the title. */
+    onSeek: () -> Unit,
 ) {
-    val queueLabel = stringResource(R.string.queue)
     val haptics = LocalHapticFeedback.current
     val crownStepPx = with(LocalDensity.current) { CrownStep.toPx() }
     val crown = remember(crownStepPx) { CrownSteps(crownStepPx) }
@@ -351,26 +301,16 @@ private fun NowPlaying(
                     // Takes the crown's input without being something to stop at for TalkBack.
                     .focusTarget(),
             ) {
-                if (art != null) Cover(art.picture, Modifier.align(Alignment.Center))
+                if (art != null) Cover(art.picture, CoverAlpha, Modifier.align(Alignment.Center))
                 ProgressRing(progress, isPlaying, animate, Modifier.fillMaxSize())
-                Text(
+                Title(
                     title,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(start = 40.dp, top = 36.dp, end = 40.dp)
-                        .fillMaxWidth()
-                        // A title that fits stays centered.
-                        .wrapContentWidth()
-                        // One that doesn't scrolls slowly instead of ending in "…".
-                        .then(if (animate) Modifier.slowMarquee() else Modifier)
-                        // On the title, the first thing a screen reader reads out.
-                        .semantics { customActions = listOf(CustomAccessibilityAction(queueLabel) { onQueue(); true }) },
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = designText(17, FontWeight.SemiBold, shadowAlpha = 0.75f),
+                    animate,
+                    onQueue,
+                    Modifier.align(Alignment.TopCenter).padding(start = 40.dp, top = 36.dp, end = 40.dp),
                 )
+                // Before the controls, so where its tap target reaches over them, they take the tap.
+                UnderTitle(elapsedMs, cantPlay, onSeek)
                 Controls(
                     isPlaying,
                     animate,
@@ -378,14 +318,6 @@ private fun NowPlaying(
                     onPlayPause,
                     onNext,
                     Modifier.align(Alignment.TopCenter).padding(top = 90.dp),
-                )
-                // Between the title and the controls, over the cover.
-                CantPlayMessage(
-                    cantPlay,
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(start = 30.dp, top = 67.dp, end = 30.dp)
-                        .fillMaxWidth(),
                 )
                 if (!artist.isNullOrBlank()) {
                     Text(
@@ -417,14 +349,102 @@ private fun NowPlaying(
 }
 
 /**
- * Says the song that [failed] can't be played, by its title, or that nothing can be played right
- * now when it wasn't the song's fault; nothing while it's null. In the primary color, and read out
- * by accessibility services when it appears, without interrupting.
+ * The song's title, centered. One too long for the screen scrolls slowly instead of ending in "…",
+ * while [animate] and on the screen: kept below another screen, e.g. the seek screen, it would
+ * scroll unseen, and wake Gusle for every frame. It also offers screen readers the Queue
+ * ([onQueue]), as they take swipes for themselves.
  */
 @Composable
-private fun CantPlayMessage(failed: () -> UnplayableSongs.Failure?, modifier: Modifier) {
-    // Read here, so a failure composes just the message again.
-    val failure = failed() ?: return
+private fun Title(title: String, animate: Boolean, onQueue: () -> Unit, modifier: Modifier) {
+    val queueLabel = stringResource(R.string.queue)
+    var visible by remember { mutableStateOf(false) }
+    Text(
+        title,
+        modifier = modifier
+            .onVisibilityChanged(minFractionVisible = 0f) { visible = it }
+            .fillMaxWidth()
+            // A title that fits stays centered.
+            .wrapContentWidth()
+            .then(if (animate && visible) Modifier.slowMarquee() else Modifier)
+            // On the title, the first thing a screen reader reads out.
+            .semantics { customActions = listOf(CustomAccessibilityAction(queueLabel) { onQueue(); true }) },
+        color = MaterialTheme.colorScheme.onSurface,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        style = designText(17, FontWeight.SemiBold, shadowAlpha = 0.75f),
+    )
+}
+
+/**
+ * Between the title and the controls, over the cover: how far the song is ([elapsedMs]; nothing
+ * while it's null), or for a moment instead, that a song [cantPlay]. Never both, as they'd overlap.
+ * A failure is read here, so it composes just this again; the time only by [ElapsedTime], so a
+ * tick composes just that.
+ */
+@Composable
+private fun BoxScope.UnderTitle(
+    elapsedMs: (() -> Long)?,
+    cantPlay: () -> UnplayableSongs.Failure?,
+    onSeek: () -> Unit,
+) {
+    val failure = cantPlay()
+    if (failure != null) {
+        CantPlayMessage(
+            failure,
+            Modifier
+                .align(Alignment.TopCenter)
+                .padding(start = 30.dp, top = 67.dp, end = 30.dp)
+                .fillMaxWidth(),
+        )
+    } else if (elapsedMs != null && LocalHiddenDepth.current == 0) {
+        // Not while kept below another screen, where it would only compose again every second,
+        // unseen: it's back, with the time as it is, in the frame it comes into view. The text is
+        // 60 dp down, as in the design, in the middle of its tap target.
+        ElapsedTime(elapsedMs, onSeek, Modifier.align(Alignment.TopCenter).padding(top = 45.dp))
+    }
+}
+
+/**
+ * How far the song is, e.g. 1:23, read from [positionMs] only here: a button that opens the seek
+ * screen ([onSeek]). The text is small, so the button reaches well around it.
+ */
+@Composable
+private fun ElapsedTime(positionMs: () -> Long, onSeek: () -> Unit, modifier: Modifier) {
+    val position = positionMs()
+    val resources = LocalResources.current
+    val inWords = rememberLengthInWords()
+    Box(
+        modifier
+            .height(ElapsedTapHeight)
+            .widthIn(min = ElapsedTapWidth)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClick = onSeek)
+            // Said in words, as "1:23" could be read as a time of day; worked out only when asked.
+            .clearAndSetSemantics { contentDescription = resources.getString(R.string.elapsed_seek, inWords(position)) }
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            formatLength(position),
+            color = artistColor(),
+            maxLines = 1,
+            style = designText(12, FontWeight.Normal, shadowAlpha = 0.85f),
+        )
+    }
+}
+
+/** The time under the title takes taps this far around it: the smallest touch target, and wider. */
+private val ElapsedTapHeight = 48.dp
+private val ElapsedTapWidth = 80.dp
+
+/**
+ * Says the song that [failure] is about can't be played, by its title, or that nothing can be
+ * played right now when it wasn't the song's fault. In the primary color, and read out by
+ * accessibility services when it appears, without interrupting.
+ */
+@Composable
+private fun CantPlayMessage(failure: UnplayableSongs.Failure, modifier: Modifier) {
     Text(
         when {
             !failure.songsFault -> stringResource(R.string.cant_play_now)
@@ -439,6 +459,9 @@ private fun CantPlayMessage(failed: () -> UnplayableSongs.Failure?, modifier: Mo
         style = designText(12, FontWeight.Medium, shadowAlpha = 0.85f),
     )
 }
+
+/** The cover shows at this opacity, a little dimmed. */
+private const val CoverAlpha = 0.9f
 
 /** A swipe left at least this far opens the queue, as does a quicker one of any length. */
 private val SwipeDistance = 48.dp
@@ -507,139 +530,6 @@ private fun Modifier.slowMarquee() = basicMarquee(
  */
 private val CrownStep = 24.dp
 
-/**
- * The artist's color, also for the small icons near it: halfway from onSurfaceVariant to
- * onSurface, like the design, as onSurfaceVariant alone is too dark over a cover.
- */
-@Composable
-private fun artistColor(): Color {
-    val colors = MaterialTheme.colorScheme
-    return lerp(colors.onSurfaceVariant, colors.onSurface, 0.5f)
-}
-
-/** Scales every dp and sp in [content] with the screen, so they're the design's own numbers. */
-@Composable
-private fun DesignScale(content: @Composable () -> Unit) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val scale = maxWidth.value / DesignWidth
-        val screenDensity = LocalDensity.current
-        val screenViewConfiguration = LocalViewConfiguration.current
-        val designDensity = remember(screenDensity, scale) { DesignDensity(screenDensity, scale) }
-        val designViewConfiguration = remember(screenViewConfiguration, scale) {
-            DesignViewConfiguration(screenViewConfiguration, scale)
-        }
-        CompositionLocalProvider(
-            LocalDensity provides designDensity,
-            LocalViewConfiguration provides designViewConfiguration,
-            content = content,
-        )
-    }
-}
-
-/**
- * The screen's density with dp and sp [scale] times as large. Sp keep the system's font scaling,
- * which on Android 14+ grows small text more than large text.
- */
-private class DesignDensity(private val screen: Density, scale: Float) : Density {
-    override val density = screen.density * scale
-    override val fontScale = screen.fontScale
-
-    override fun TextUnit.toDp(): Dp = with(screen) { this@toDp.toDp() }
-
-    override fun Dp.toSp(): TextUnit = with(screen) { this@toSp.toSp() }
-}
-
-/** Keeps touch targets at least as large as on any screen, when [DesignDensity] shrinks dp. */
-private class DesignViewConfiguration(screen: ViewConfiguration, scale: Float) : ViewConfiguration by screen {
-    override val minimumTouchTargetSize = screen.minimumTouchTargetSize / scale
-}
-
-/**
- * The design's text: the watch's font at [size] sp, in a line half as tall again, centered in it
- * as in the design, with a soft dark shadow that keeps it readable over a cover.
- */
-@Composable
-private fun designText(size: Int, weight: FontWeight, shadowAlpha: Float): TextStyle {
-    val shadowOffset = with(LocalDensity.current) { 1.dp.toPx() }
-    val shadowBlur = with(LocalDensity.current) { 6.dp.toPx() }
-    return MaterialTheme.typography.bodyMedium.copy(
-        fontSize = size.sp,
-        fontWeight = weight,
-        lineHeight = (size * 1.5f).sp,
-        lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
-        shadow = TextShadow(Color.Black.copy(alpha = shadowAlpha), Offset(0f, shadowOffset), shadowBlur),
-    )
-}
-
-/** The cover is drawn this large (dp of the design's [DesignWidth]). */
-private const val CoverDiameter = 161f
-
-/** The cover's size on this screen, in pixels. */
-@Composable
-private fun coverSizePx(): Int =
-    (LocalWindowInfo.current.containerSize.width * CoverDiameter / DesignWidth).roundToInt()
-
-/**
- * The [picture] in a circle in the middle, or the no-cover note when there's none, fading into
- * black toward the edge. Center-cropped, so a 16:9 cover shows its middle.
- */
-@Composable
-private fun Cover(picture: ImageBitmap?, modifier: Modifier) {
-    val painter = if (picture != null) remember(picture) { BitmapPainter(picture) } else rememberNoCoverPainter()
-    Image(
-        painter,
-        contentDescription = null,
-        modifier = modifier.size(CoverDiameter.dp).fadeIntoBlack(),
-        contentScale = ContentScale.Crop,
-    )
-}
-
-/**
- * Fades the content out from 35% of the radius to nothing at the edge, at 90% opacity. It's drawn
- * once into a layer of its own, and only drawn again when the content changes.
- */
-private fun Modifier.fadeIntoBlack() =
-    graphicsLayer {
-        compositingStrategy = CompositingStrategy.Offscreen
-        alpha = 0.9f
-    }.drawWithCache {
-        val fade = Brush.radialGradient(0.35f to Color.Black, 1f to Color.Transparent)
-        onDrawWithContent {
-            drawContent()
-            drawRect(fade, blendMode = BlendMode.DstIn)
-        }
-    }
-
-/**
- * How bright the no-cover glow is, 70% of the way out, next to primaryContainer in the middle: the
- * design's darker shade between it and black at the edge.
- */
-private const val NoCoverGlowEdgeBrightness = 0.58f
-
-/**
- * A glow with a large faint music note, always in the app theme's colors: those are a song without
- * a cover's, also while the last song's colors are still up.
- */
-@Composable
-private fun rememberNoCoverPainter(): Painter {
-    val note = painterResource(R.drawable.ic_music_note)
-    val colors = LocalAppTheme.current.colors
-    return remember(note, colors) {
-        val middle = colors.primaryContainer
-        val edge = Color(
-            red = middle.red * NoCoverGlowEdgeBrightness,
-            green = middle.green * NoCoverGlowEdgeBrightness,
-            blue = middle.blue * NoCoverGlowEdgeBrightness,
-        )
-        val glow = Brush.radialGradient(0f to middle, 0.7f to edge, 1f to Color.Black)
-        NoCoverPainter(note, glow, colors.primary.copy(alpha = 0.22f), noteSize = 104.dp)
-    }
-}
-
-/** The ring runs clockwise from just right of the clock (0° is 3 o'clock) to just left of it. */
-private const val RingStart = -70f
-private const val RingSweep = 320f
-
 /** While playing, the played part waves this far in and out, 50 times around a full circle. */
 private val WaveHeight = 1.8.dp
 private const val WavesPerTurn = 50
@@ -652,18 +542,23 @@ private const val WaveChangeMs = 300
 
 /**
  * The song's progress along the edge, over a faint track, with a gap at the top for the clock.
- * While playing, the played part waves, and the waves travel along it while [animate].
+ * While playing, the played part waves, and the waves travel along it while [animate] and on the
+ * screen.
  */
 @Composable
 private fun ProgressRing(progress: () -> Float, isPlaying: Boolean, animate: Boolean, modifier: Modifier) {
     val color = MaterialTheme.colorScheme.primary
+    // Off the screen, e.g. kept below the seek screen or the Queue, the waves would travel unseen,
+    // and wake Gusle for every frame.
+    var visible by remember { mutableStateOf(false) }
+    val travel = animate && visible
     // How wavy, from flat (0) to full height (1), and where the waves are. Both are read only while
     // drawing, so a frame draws just the ring again.
     val wave = remember { Animatable(if (isPlaying) 1f else 0f) }
     val phase = remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(isPlaying, animate) {
+    LaunchedEffect(isPlaying, travel) {
         val height = if (isPlaying) 1f else 0f
-        if (!animate) {
+        if (!travel) {
             wave.snapTo(height)
             return@LaunchedEffect
         }
@@ -688,13 +583,13 @@ private fun ProgressRing(progress: () -> Float, isPlaying: Boolean, animate: Boo
     }
     // A layer of its own, so a tick or a frame draws just the ring again.
     Spacer(
-        modifier.graphicsLayer().drawWithCache {
+        modifier.onVisibilityChanged(minFractionVisible = 0f) { visible = it }.graphicsLayer().drawWithCache {
             val center = size.center
-            val radius = 112.dp.toPx()
+            val radius = RingRadius.toPx()
             val topLeft = center - Offset(radius, radius)
             val arcSize = Size(radius * 2, radius * 2)
-            val track = Stroke(4.dp.toPx())
-            val played = Stroke(4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            val track = Stroke(RingWidth.toPx())
+            val played = Stroke(RingWidth.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
             val waveHeight = WaveHeight.toPx()
             val path = Path()
             onDrawBehind {
@@ -713,8 +608,6 @@ private fun ProgressRing(progress: () -> Float, isPlaying: Boolean, animate: Boo
         },
     )
 }
-
-private val RingTrack = Color.White.copy(alpha = 0.16f)
 
 /**
  * Sets this path to the ring's played part: [sweep] degrees clockwise from [RingStart], waving
@@ -814,21 +707,17 @@ private fun Controls(
             ) {
                 ShadowedIcon(R.drawable.ic_skip_previous, stringResource(R.string.previous_song), SkipShadow)
             }
-            // See-through: the cover shows through a tint of the primary color.
             FilledIconButton(
                 onClick = onPlayPause ?: {},
                 modifier = Modifier.size(66.dp, 52.dp),
                 enabled = onPlayPause != null,
                 shapes = IconButtonDefaults.shapes(playShape),
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
-                    contentColor = Color.White,
-                ),
+                colors = seeThroughButtonColors(),
             ) {
                 ShadowedIcon(
                     if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow,
                     stringResource(if (isPlaying) R.string.pause else R.string.play),
-                    PlayShadow,
+                    SeeThroughIconShadow,
                 )
             }
             IconButton(
@@ -853,65 +742,14 @@ private class AnimatedCornerSize(private val size: () -> Dp) : CornerSize {
 }
 
 private val SkipShadow = Shadow(radius = 4.dp, offset = DpOffset(0.dp, 1.dp), alpha = 0.85f)
-private val PlayShadow = Shadow(radius = 3.dp, offset = DpOffset(0.dp, 1.dp), alpha = 0.65f)
-
-/** A 28 dp icon in the content color, over a soft [shadow] of its own shape. */
-@Composable
-private fun ShadowedIcon(@DrawableRes id: Int, contentDescription: String, shadow: Shadow) {
-    val icon = ImageVector.vectorResource(id)
-    val outline = remember(icon) { IconOutline(icon) }
-    Icon(icon, contentDescription, Modifier.size(28.dp).dropShadow(outline, shadow))
-}
-
-/**
- * The shape of a vector icon, for its shadow: all its paths, moved, rotated and scaled by their
- * groups as when drawn. Compose blurs it once into a bitmap and keeps it.
- */
-private class IconOutline(icon: ImageVector) : Shape {
-    private val path = Path().apply { addGroup(icon.root, Matrix()) }
-    private val viewport = Size(icon.viewportWidth, icon.viewportHeight)
-
-    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        val scaled = Path().apply {
-            addPath(path)
-            transform(Matrix().apply { scale(size.width / viewport.width, size.height / viewport.height) })
-        }
-        return Outline.Generic(scaled)
-    }
-}
-
-/** Adds [group]'s paths, transformed as VectorPainter draws them, inside [parent]'s transformation. */
-private fun Path.addGroup(group: VectorGroup, parent: Matrix) {
-    val matrix = Matrix(parent.values.copyOf()).apply {
-        translate(group.translationX + group.pivotX, group.translationY + group.pivotY)
-        rotateZ(group.rotation)
-        scale(group.scaleX, group.scaleY)
-        translate(-group.pivotX, -group.pivotY)
-    }
-    for (node in group) {
-        when (node) {
-            is VectorPath -> addPath(node.pathData.toPath().apply { transform(matrix) })
-            is VectorGroup -> addGroup(node, matrix)
-        }
-    }
-}
 
 @Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true)
 @Composable
 private fun NowPlayingPreview() {
-    // A 16:9 stand-in cover, in the Yamato cover's red, fading to near black.
-    val picture = remember {
-        createBitmap(320, 180).applyCanvas {
-            val gradient = LinearGradient(
-                0f, 0f, 320f, 180f, 0xFF93291C.toInt(), 0xFF101010.toInt(), Shader.TileMode.CLAMP,
-            )
-            drawPaint(Paint().apply { shader = gradient })
-        }.asImageBitmap()
-    }
     NowPlayingPreview(
         title = "River at Dawn",
         artist = "Test Ensemble",
-        art = CoverArt(SongCover(Uri.EMPTY, 0), picture, seedColorScheme(0xFF93291C.toInt())),
+        art = rememberStandInArt(),
         isPlaying = true,
         shuffleOn = true,
     )
@@ -939,7 +777,9 @@ private fun NowPlayingPreview(title: String, artist: String?, art: CoverArt, isP
                     artist,
                     art,
                     isPlaying,
+                    // 1:25 of 3:45.
                     progress = { 0.38f },
+                    elapsedMs = { 85_000 },
                     animate = false,
                     volume = PreviewVolume,
                     shuffleOn = shuffleOn,
@@ -948,6 +788,7 @@ private fun NowPlayingPreview(title: String, artist: String?, art: CoverArt, isP
                     onPlayPause = {},
                     onNext = {},
                     onQueue = {},
+                    onSeek = {},
                 )
             }
         }

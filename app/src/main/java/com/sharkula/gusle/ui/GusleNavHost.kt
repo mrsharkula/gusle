@@ -33,6 +33,7 @@ import com.sharkula.gusle.ui.covers.SongCover
 import com.sharkula.gusle.ui.covers.playingSongColors
 import com.sharkula.gusle.ui.home.HomeScreen
 import com.sharkula.gusle.ui.nowplaying.NowPlayingScreen
+import com.sharkula.gusle.ui.nowplaying.SeekScreen
 import com.sharkula.gusle.ui.playback.playFrom
 import com.sharkula.gusle.ui.playback.rememberPlayerConnection
 import com.sharkula.gusle.ui.playback.shuffleAll
@@ -79,6 +80,10 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object Queue : Screen
+
+    /** Seeking in the playing song, opened from Now playing. */
+    @Serializable
+    data object Seek : Screen
 
     @Serializable
     data object Settings : Screen
@@ -298,7 +303,10 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                 )
             }
             entry<Screen.NowPlaying>(metadata = slidesIn(Screen.NowPlaying)) {
-                NowPlayingScreen(player, songs.byId, onQueue = { go(Screen.Queue) })
+                NowPlayingScreen(player, songs.byId, onQueue = { go(Screen.Queue) }, onSeek = { go(Screen.Seek) })
+            }
+            entry<Screen.Seek>(metadata = slidesIn(Screen.Seek)) {
+                SeekScreen(player, songs.byId)
             }
             entry<Screen.Queue>(metadata = slidesIn(Screen.Queue)) {
                 PlayingSongTheme(songs) { _, _ ->

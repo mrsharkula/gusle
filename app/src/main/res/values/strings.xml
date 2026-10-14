@@ -42,6 +42,18 @@
     <string name="cant_play_song">Can\'t play this song</string>
     <string name="cant_play_titled">Can\'t play “%1$s”</string>
     <string name="cant_play_now">Can\'t play right now</string>
+    <!-- The time under the title on Now playing, a button that opens the seek screen, as screen
+         readers say it: e.g. "1 minute 23 seconds, seek". -->
+    <string name="elapsed_seek">%1$s, seek</string>
+    <!-- Under the big time on the seek screen: the song's length, e.g. "of 3:45". -->
+    <string name="of_length">of %1$s</string>
+    <!-- The big time on the seek screen, as screen readers say it: e.g. "1 minute 23 seconds of 3
+         minutes 45 seconds". -->
+    <string name="position_of_length">%1$s of %2$s</string>
+    <string name="back_10_seconds">Back 10 seconds</string>
+    <string name="forward_10_seconds">Forward 10 seconds</string>
+    <!-- A hint at the bottom of the seek screen, for a few seconds after it opens. -->
+    <string name="turn_the_crown">Turn the crown</string>
     <string name="stop_playing">Stop playing</string>
     <string name="rescan_music">Rescan music</string>
     <string name="rescanning">Scanning…</string>
@@ -70,6 +82,19 @@
     <plurals name="album_count">
         <item quantity="one">%d album</item>
         <item quantity="other">%d albums</item>
+    </plurals>
+    <!-- Lengths in words, for screen readers: e.g. "1 hour 2 minutes 5 seconds". -->
+    <plurals name="hours">
+        <item quantity="one">%d hour</item>
+        <item quantity="other">%d hours</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
+    <plurals name="seconds">
+        <item quantity="one">%d second</item>
+        <item quantity="other">%d seconds</item>
     </plurals>
     <plurals name="songs_found">
         <item quantity="one">%d song found</item>

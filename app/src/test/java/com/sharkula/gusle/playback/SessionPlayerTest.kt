@@ -132,6 +132,27 @@ class SessionPlayerTest {
     }
 
     @Test
+    fun keepsGoingBackAfterSeekingInTheSong() {
+        // Previous while restored and paused, then a seek in that song, e.g. from the seek screen.
+        val (player, fake) = player(current = 3)
+        player.seekToPrevious()
+        player.seekTo(2, 60_000)
+        fake.done.clear()
+        player.songFailed(SongsFault)
+        assertEquals(listOf("seek 1", "prepare"), fake.done)
+    }
+
+    @Test
+    fun goesForwardAfterSeekingInAnotherSong() {
+        val (player, fake) = player(current = 3)
+        player.seekToPrevious()
+        player.seekTo(1, 60_000)
+        fake.done.clear()
+        player.songFailed(SongsFault)
+        assertEquals(listOf("seek 2", "prepare"), fake.done)
+    }
+
+    @Test
     fun aSongThatPlaysIsNoLongerMarked() {
         unplayable.failed(20L, "Song 20")
         val (_, fake) = player(current = 1)
