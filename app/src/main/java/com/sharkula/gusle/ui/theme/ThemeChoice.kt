@@ -15,14 +15,19 @@ private const val ThemePrefs = "app_theme"
 private const val ThemeKey = "theme"
 
 /**
- * The [AppTheme] chosen in Settings, kept on disk. The app keeps one, made as its screen first
- * starts (not for the playback service alone), and MainActivity provides its [current] theme around
- * every screen. Use it from the main thread: it reads the disk once, off it, and writes in the
+ * The [AppTheme] chosen in Settings, kept on disk. The app keeps one, made as its screen or its
+ * tile first needs it (not for the playback service alone), and MainActivity provides its [current]
+ * theme around every screen. Use it from the main thread: it reads the disk once, off it, and writes in the
  * background. It's backed up and moved to a new watch, unlike the queue in
  * [com.sharkula.gusle.playback.LastPlayed]: a theme means the same on any watch.
  */
-class ThemeChoice internal constructor(openPrefs: () -> SharedPreferences) {
-    constructor(context: Context) : this(
+class ThemeChoice internal constructor(
+    private val onChoose: () -> Unit = {},
+    openPrefs: () -> SharedPreferences,
+) {
+    /** [onChoose] runs when another theme is chosen, e.g. for the tile to follow it. */
+    constructor(context: Context, onChoose: () -> Unit) : this(
+        onChoose,
         { context.applicationContext.getSharedPreferences(ThemePrefs, Context.MODE_PRIVATE) },
     )
 
@@ -54,6 +59,7 @@ class ThemeChoice internal constructor(openPrefs: () -> SharedPreferences) {
         current = theme
         // Written in the background (apply, not commit).
         prefs.edit { putString(ThemeKey, theme.id) }
+        onChoose()
     }
 
     private fun read(): AppTheme =

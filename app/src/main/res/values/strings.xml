@@ -54,6 +54,12 @@
     <string name="forward_10_seconds">Forward 10 seconds</string>
     <!-- A hint at the bottom of the seek screen, for a few seconds after it opens. -->
     <string name="turn_the_crown">Turn the crown</string>
+    <!-- On the tile, when there's no song to show. -->
+    <string name="tile_nothing_playing_text">Pick a song in Gusle, or shuffle them all.</string>
+    <!-- On the tile, when there's no song to show nor any to shuffle, e.g. before Gusle may read
+         the music. -->
+    <string name="tile_open_gusle_text">Open Gusle to pick a song.</string>
+    <string name="open_gusle">Open Gusle</string>
     <string name="stop_playing">Stop playing</string>
     <string name="rescan_music">Rescan music</string>
     <string name="rescanning">Scanning…</string>

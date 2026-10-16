@@ -19,12 +19,21 @@ import kotlinx.coroutines.launch
 
 /**
  * The manifest's alias of MainActivity that opens Now playing. It isn't exported, so only Gusle's
- * own intents reach it: other apps can open Gusle, but not make it connect to the player.
+ * own intents reach it: other apps can open Gusle, but not make it connect to the player. The tile
+ * can't use it ([OpenNowPlayingExtra]).
  */
 private const val OpenNowPlaying = "com.sharkula.gusle.OpenNowPlaying"
 
 /** Opens Gusle on Now playing, on top of the screen it's on; the watch's media controls use it. */
 fun Context.nowPlayingIntent(): Intent = Intent().setClassName(this, OpenNowPlaying)
+
+/**
+ * Asks MainActivity itself to open Now playing, as [nowPlayingIntent] does, for the tile: its taps
+ * can only launch an exported activity, which any app can launch too. So it holds [NowPlayingKey],
+ * a secret only Gusle knows, and without it MainActivity opens as from the launcher. Other apps
+ * still can't make Gusle connect to the player.
+ */
+const val OpenNowPlayingExtra = "com.sharkula.gusle.OPEN_NOW_PLAYING"
 
 class MainActivity : ComponentActivity() {
     private val openNowPlaying = NowPlayingRequest()
@@ -91,8 +100,14 @@ class MainActivity : ComponentActivity() {
         // Opened from the recent apps, the intent that started the task comes again; that's not a
         // tap on the media controls.
         val fromRecents = (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
-        if (intent.component?.className == OpenNowPlaying && !fromRecents) {
+        if (!fromRecents && (intent.component?.className == OpenNowPlaying || intent.hasNowPlayingKey())) {
             openNowPlaying.pending = true
         }
+    }
+
+    /** Whether this intent holds the key that only Gusle's tile sends ([OpenNowPlayingExtra]). */
+    private fun Intent.hasNowPlayingKey(): Boolean {
+        val sent = getStringExtra(OpenNowPlayingExtra) ?: return false
+        return (application as GusleApp).nowPlayingKey.matches(sent)
     }
 }

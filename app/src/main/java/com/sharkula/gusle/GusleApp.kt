@@ -10,11 +10,15 @@ import com.sharkula.gusle.playback.LastPlayed
 import com.sharkula.gusle.playback.PlayingSong
 import com.sharkula.gusle.playback.PlayingSongHolder
 import com.sharkula.gusle.playback.UnplayableSongs
+import com.sharkula.gusle.tile.TileUpdates
 import com.sharkula.gusle.ui.covers.CoverColors
 import com.sharkula.gusle.ui.covers.SongCoverFetcher
 import com.sharkula.gusle.ui.covers.SongCoverKeyer
 import com.sharkula.gusle.ui.theme.ThemeChoice
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
 
 class GusleApp : Application(), SingletonImageLoader.Factory {
     /** The songs on the watch, shared by the screens and the playback service. */
@@ -34,15 +38,23 @@ class GusleApp : Application(), SingletonImageLoader.Factory {
     val unplayable by lazy { UnplayableSongs() }
 
     /**
-     * The app theme chosen in Settings. Made, and read, as the screen first starts: the playback
-     * service starts the app alone too, with no screen to color.
+     * The app theme chosen in Settings. Made, and read, as the screen or the tile first needs it: the
+     * playback service starts the app alone too, with no screen to color.
      */
-    val themeChoice by lazy { ThemeChoice(this) }
+    val themeChoice by lazy { ThemeChoice(this, onChoose = tileUpdates::changed) }
+
+    /** Asks for a new tile when what it shows changes. */
+    val tileUpdates by lazy { TileUpdates(this) }
+
+    /** The secret that lets the tile open Now playing. */
+    val nowPlayingKey by lazy { NowPlayingKey(this) }
 
     override fun onCreate() {
         super.onCreate()
         // Starts reading what played last, so Home can show it as soon as the songs are read.
-        playing = PlayingSongHolder(library, lastPlayed)
+        playing = PlayingSongHolder(library, lastPlayed, onChange = { tileUpdates.changed() })
+        // The songs read anew may change the tile too, e.g. once there are some to shuffle.
+        MainScope().launch { library.songs.drop(1).collect { tileUpdates.changed() } }
     }
 
     /** Coil's image loader, taught to load covers from song files. */

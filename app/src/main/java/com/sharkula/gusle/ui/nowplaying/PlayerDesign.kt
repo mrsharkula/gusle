@@ -153,10 +153,15 @@ fun artistColor(): Color {
 /** The cover is drawn this large (dp of the design's [DesignWidth]). */
 private const val CoverDiameter = 161f
 
-/** The cover's size on this screen, in pixels. */
+/**
+ * The cover's size in pixels on a screen [screenWidthPx] across. The tile reads it at this size
+ * too, from the same width, so one copy in Coil's memory, and one read of the file, serves both.
+ */
+fun coverSizePx(screenWidthPx: Int): Int = (screenWidthPx * CoverDiameter / DesignWidth).roundToInt()
+
+/** The cover's size on this screen, in pixels: the window's, which on a watch is the whole screen. */
 @Composable
-private fun coverSizePx(): Int =
-    (LocalWindowInfo.current.containerSize.width * CoverDiameter / DesignWidth).roundToInt()
+private fun coverSizePx(): Int = coverSizePx(LocalWindowInfo.current.containerSize.width)
 
 /**
  * The [song]'s cover and its colors, which go up together once both are ready; until then the

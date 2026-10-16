@@ -44,7 +44,8 @@
         </activity>
 
         <!-- Opens MainActivity on Now playing; the media controls' intent goes here. Not exported,
-             so other apps can't ask for it. -->
+             so other apps can't ask for it. The tile can't launch it either: it asks MainActivity
+             itself, with a key only Gusle knows (OpenNowPlayingExtra). -->
         <activity-alias
             android:name=".OpenNowPlaying"
             android:exported="false"
@@ -61,6 +62,24 @@
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
+        </service>
+
+        <!-- The tile: what's playing, with its buttons, one swipe from the watch face. Only the
+             system's tile host may bind it. The preview is what the tile picker shows. -->
+        <service
+            android:name=".tile.NowPlayingTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <!-- One preview: Gusle is made for round watches (DESIGN.md). -->
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/tile_preview"
+                tools:ignore="SquareAndRoundTilePreviews" />
         </service>
     </application>
 

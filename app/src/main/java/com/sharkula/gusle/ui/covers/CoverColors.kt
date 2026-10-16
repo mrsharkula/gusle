@@ -61,6 +61,12 @@ private val RetryWaitsMs = longArrayOf(2_000, 8_000)
 class CoverArt(val cover: SongCover?, val picture: ImageBitmap?, val colors: ColorScheme?)
 
 /**
+ * A song's cover and its colors, read together: [picture] is null for a song without a cover, or
+ * whose cover couldn't be read, and [colors] only when it couldn't be read, which may pass.
+ */
+class CoverPicture(val picture: Bitmap?, val colors: OwnColors?)
+
+/**
  * A cover's own colors, once worked out: null [scheme] for a song without a cover, or with one
  * that has no real color in it, which is shown in the app theme's colors. The
  * theme's colors aren't kept here, so a change of theme reaches every such song at once.
@@ -147,20 +153,35 @@ class CoverColors(private val context: Context) {
         val art = if (cover == null) {
             CoverArt(null, null, null)
         } else {
-            when (val result = read(cover, sizePx, Scale.FILL, keep = true)) {
-                is SuccessResult -> {
-                    val picture = result.image.toBitmap()
-                    // Onto the GPU now, while its colors are worked out, rather than in the frame it
-                    // goes up in: ~2.3 ms of that frame on the watch.
-                    picture.prepareToDraw()
-                    CoverArt(cover, picture.asImageBitmap(), (known(cover) ?: colorsOf(cover, picture)).scheme)
-                }
-                is ErrorResult -> CoverArt(cover, null, noColors(cover, result)?.scheme)
-            }
+            // Onto the GPU as soon as it's read, while its colors are worked out, rather than in the
+            // frame it goes up in: ~2.3 ms of that frame on the watch.
+            val read = readWithColors(cover, sizePx, onRead = Bitmap::prepareToDraw)
+            CoverArt(cover, read.picture?.asImageBitmap(), read.colors?.scheme)
         }
         lastArt = art
         return art
     }
+
+    /**
+     * [cover], at least [sizePx] across, with its colors, for the tile, which bakes its own copy:
+     * read once, and kept in Coil's memory like [art]'s, so at Now playing's size it's one read for
+     * both. Unlike [art], it leaves [lastArt] to the screens, and doesn't put the picture on the GPU.
+     */
+    suspend fun forTile(cover: SongCover, sizePx: Int): CoverPicture = readWithColors(cover, sizePx)
+
+    /**
+     * [cover], at least [sizePx] across and kept in Coil's memory, with its colors worked out from
+     * the same picture unless they're known. [onRead] gets the picture first.
+     */
+    private suspend fun readWithColors(cover: SongCover, sizePx: Int, onRead: (Bitmap) -> Unit = {}): CoverPicture =
+        when (val result = read(cover, sizePx, Scale.FILL, keep = true)) {
+            is SuccessResult -> {
+                val picture = result.image.toBitmap()
+                onRead(picture)
+                CoverPicture(picture, known(cover) ?: colorsOf(cover, picture))
+            }
+            is ErrorResult -> CoverPicture(null, noColors(cover, result))
+        }
 
     /** The cover in memory rather than on the GPU, so its pixels can be read. */
     private suspend fun read(cover: SongCover, sizePx: Int, scale: Scale, keep: Boolean): ImageResult {

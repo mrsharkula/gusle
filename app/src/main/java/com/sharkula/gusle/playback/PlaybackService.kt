@@ -2,13 +2,14 @@ package com.sharkula.gusle.playback
 
 import android.app.PendingIntent
 import android.os.Bundle
+import android.util.Log
 import androidx.annotation.OptIn
+import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSession.ConnectionResult
@@ -25,6 +26,7 @@ import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.musicLibrary
 import com.sharkula.gusle.nowPlayingIntent
+import java.util.concurrent.ExecutionException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -34,6 +36,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
+
+private const val Tag = "PlaybackService"
 
 /** While playing, where it is is saved this often, so a crash or a dead battery loses little. */
 private const val SaveEveryMs = 10_000L
@@ -77,11 +81,15 @@ class PlaybackService : MediaSessionService() {
     private val playing get() = (application as GusleApp).playing
     private val lastPlayed get() = (application as GusleApp).lastPlayed
     private val unplayable get() = (application as GusleApp).unplayable
+    private val tileUpdates get() = (application as GusleApp).tileUpdates
     private var savingWhilePlaying: Job? = null
     private var notificationUpdate: Job? = null
     private var updatingNotification = false
 
-    /** Whether the last notification update that went out kept the service in the foreground. */
+    /**
+     * Whether the service is in the foreground, as the last notification update that went out left
+     * it: as asked until it's done, and then as it really is.
+     */
     private var notificationInForeground = false
 
     /**
@@ -105,6 +113,9 @@ class PlaybackService : MediaSessionService() {
                 save(onlyNewQueue = true)
             }
             if (events.contains(Player.EVENT_IS_PLAYING_CHANGED)) saveWhilePlaying()
+            // A jump within the song: the tile's time goes on from somewhere else. Song changes and
+            // play/pause reach the tile through the song shown ([PlayingSongHolder]).
+            if (events.contains(Player.EVENT_POSITION_DISCONTINUITY)) tileUpdates.changed()
         }
     }
 
@@ -164,14 +175,13 @@ class PlaybackService : MediaSessionService() {
      * state. Anything else goes out at once: going into the foreground, as Android requires, and
      * pausing or stopping, for which Media3 asks to stay in the foreground for a while yet.
      */
-    @OptIn(UnstableApi::class) // onUpdateNotificationAsync, shouldShowPlayButton
+    @OptIn(UnstableApi::class) // onUpdateNotificationAsync
     override fun onUpdateNotificationAsync(
         session: MediaSession,
         startInForegroundRequired: Boolean,
     ): ListenableFuture<Void?> {
         // Not Media3's isPlaybackOngoing: it stays true once the service has been in the foreground.
-        val playsOn = !Util.shouldShowPlayButton(session.player)
-        if (startInForegroundRequired && notificationInForeground && playsOn && !updatingNotification) {
+        if (startInForegroundRequired && notificationInForeground && session.player.playsOn && !updatingNotification) {
             if (notificationUpdate == null) {
                 notificationUpdate = scope.launch {
                     delay(NotificationUpdateDelayMs)
@@ -191,7 +201,29 @@ class PlaybackService : MediaSessionService() {
         notificationUpdate?.cancel()
         notificationUpdate = null
         notificationInForeground = startInForegroundRequired
-        return super.onUpdateNotificationAsync(session, startInForegroundRequired)
+        val update = super.onUpdateNotificationAsync(session, startInForegroundRequired)
+        // Once it's done, whether the service really is in the foreground: the tile waits for that
+        // before it lets go of a song it started. Not what was asked for: Android may refuse the
+        // foreground to a service started in the background, and Media3 takes the notification
+        // down instead when there's nothing to show, e.g. with no song.
+        update.addListener(
+            {
+                if (!update.isCancelled) {
+                    try {
+                        update.get()
+                    } catch (e: ExecutionException) {
+                        Log.w(Tag, "Couldn't update the notification", e.cause)
+                    }
+                }
+                // No type (0) while it's out of the foreground.
+                val inForeground = foregroundServiceType != 0
+                // Otherwise, after a refused start, the next updates would wait to go out as one.
+                notificationInForeground = inForeground
+                playing.inForeground(inForeground)
+            },
+            ContextCompat.getMainExecutor(this),
+        )
+        return update
     }
 
     override fun onDestroy() {
