@@ -20,16 +20,18 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.wear.compose.foundation.LocalReduceMotion
+import com.sharkula.gusle.ui.ambient.LocalAmbient
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
  * Whether the watch's screen is on, and then each change. It's off both when it's dark and when
- * the watch dims it to its always-on display. In the always-on display Gusle stays on the screen,
- * dimmed by the watch, and its activity stays resumed, so its lifecycle doesn't tell.
+ * the watch is in its always-on display. There Gusle shows its own (see AmbientMode), and its
+ * activity may stay resumed, so its lifecycle doesn't tell.
  */
 fun Context.screenOn(): Flow<Boolean> = callbackFlow {
     val receiver = object : BroadcastReceiver() {
@@ -48,17 +50,24 @@ fun Context.screenOn(): Flow<Boolean> = callbackFlow {
 }.conflate().distinctUntilChanged()
 
 /**
- * Whether Gusle is on the screen and the screen is on: what anything that ticks or moves waits
- * for, so nothing redraws in the background or in the always-on display.
+ * Whether Gusle is on the screen, the screen is on, and Gusle's always-on display isn't over it:
+ * what anything that ticks or moves waits for, so nothing redraws in the background, nor under the
+ * always-on display.
  */
 @Composable
 fun rememberScreenShown(): State<Boolean> {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val context = LocalContext.current
-    return produceState(initialValue = false, lifecycle, context) {
+    val ambient = LocalAmbient.current
+    return produceState(initialValue = false, lifecycle, context, ambient) {
+        val power = context.getSystemService<PowerManager>()
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             try {
-                context.screenOn().collect { value = it }
+                // Whichever says so first: the screen going off, or the watch going into ambient.
+                // Leaving ambient, the screen may be on before its broadcast comes: then it asks.
+                combine(context.screenOn(), snapshotFlow { ambient.isAmbient }) { on, inAmbient ->
+                    !inAmbient && (on || power?.isInteractive == true)
+                }.collect { value = it }
             } finally {
                 value = false
             }

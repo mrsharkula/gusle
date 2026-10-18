@@ -45,7 +45,7 @@ private const val HighHeight = 1f
 private val BarWayNanos = longArrayOf(900_000_000, 700_000_000, 1_100_000_000)
 
 /** The bars' heights while a song plays but nothing may move. */
-private val StillHeights = floatArrayOf(0.5f, 1f, 0.7f)
+internal val StillHeights = floatArrayOf(0.5f, 1f, 0.7f)
 
 /** A pause takes the bars down low over this long, and playing again sets them off over this long. */
 private const val SwingChangeNanos = 300_000_000L

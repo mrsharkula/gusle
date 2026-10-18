@@ -6,6 +6,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import com.sharkula.gusle.data.MusicLibrary
+import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,6 +16,15 @@ import kotlinx.coroutines.launch
 
 /** The song the player has, by its [com.sharkula.gusle.data.Song.id], and whether it's playing. */
 data class PlayingSong(val songId: Long, val isPlaying: Boolean)
+
+/**
+ * What the tile and the always-on display show of a player: its song, whether it plays, where it
+ * is, and how long it is if it knows.
+ */
+class PlayerState(val songId: Long, val isPlaying: Boolean, val positionMs: Long, val durationMs: Long?) {
+    /** How long [song], this player's, is: as the player knows it, or else as MediaStore does (0 if neither). */
+    fun durationMsOf(song: Song): Long = durationMs ?: song.durationMs
+}
 
 /**
  * Whether this player counts as playing: whenever its play/pause button shows pause, as on Now
@@ -97,6 +107,9 @@ class PlayingSongHolder(
 
     /** How long the song is, in ms, if the service's player knows it already; otherwise null. */
     fun durationMs(): Long? = player?.knownDurationMs
+
+    /** The [song], with where it is and how long, as they are now; null when there's none. */
+    fun now(): PlayerState? = playing.value?.let { PlayerState(it.songId, it.isPlaying, positionMs(), durationMs()) }
 
     /**
      * Forgets the song saved to come back to, for Stop playing, when the service's player has no

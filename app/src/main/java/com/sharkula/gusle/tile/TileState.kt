@@ -5,6 +5,7 @@ import android.view.WindowManager
 import androidx.media3.common.Player
 import com.sharkula.gusle.data.MusicLibrary
 import com.sharkula.gusle.data.Songs
+import com.sharkula.gusle.playback.PlayerState
 import com.sharkula.gusle.playback.PlayingSongHolder
 import com.sharkula.gusle.playback.knownDurationMs
 import com.sharkula.gusle.playback.playsOn
@@ -24,9 +25,6 @@ private const val ClockToleranceMs = 2_000L
 /** Between the parts of [TileLook.still]: a character no title has. */
 private const val Separator = "\u001F"
 
-/** What the tile shows of the player: its song, whether it plays, where it is, and how long it is if it knows. */
-internal class PlayerState(val songId: Long, val isPlaying: Boolean, val positionMs: Long, val durationMs: Long?)
-
 /** The state of this player, e.g. the tile's controller right after a tap; null when it has no song. */
 internal fun Player.state(): PlayerState? =
     currentMediaItem?.songId?.let { songId ->
@@ -37,8 +35,10 @@ internal fun Player.state(): PlayerState? =
  * The state of the service's player, or of the song it comes back to, without starting the service:
  * what the tile shows unless a tap on it just changed it. Null when there's no song.
  */
-internal suspend fun PlayingSongHolder.state(): PlayerState? =
-    load()?.let { song -> PlayerState(song.songId, song.isPlaying, positionMs(), durationMs()) }
+internal suspend fun PlayingSongHolder.state(): PlayerState? {
+    load()
+    return now()
+}
 
 /**
  * The songs on the watch, read first unless a read has found some: one that failed or found none,
@@ -93,7 +93,7 @@ internal data class TileContent(
                 artist = song.artist,
                 isPlaying = player.isPlaying,
                 positionMs = player.positionMs,
-                durationMs = player.durationMs ?: song.durationMs,
+                durationMs = player.durationMsOf(song),
                 at = at,
                 // A song without a cover gets a black dot, which doesn't show (TileResources).
                 hasCover = true,

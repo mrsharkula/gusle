@@ -76,6 +76,9 @@ val Context.coverColors: CoverColors get() = (applicationContext as GusleApp).co
 /** The song the playback service is playing, or the one it played last; see [PlayingSongHolder]. */
 val Context.playingSong: StateFlow<PlayingSong?> get() = (applicationContext as GusleApp).playing.song
 
+/** The app's one [PlayingSongHolder], for where its song is and how long, from any of its contexts. */
+val Context.playingSongHolder: PlayingSongHolder get() = (applicationContext as GusleApp).playing
+
 /** The songs the playback service couldn't play; see [UnplayableSongs]. */
 val Context.unplayableSongs: UnplayableSongs get() = (applicationContext as GusleApp).unplayable
 

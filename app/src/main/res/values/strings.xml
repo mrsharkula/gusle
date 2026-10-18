@@ -60,6 +60,8 @@
          the music. -->
     <string name="tile_open_gusle_text">Open Gusle to pick a song.</string>
     <string name="open_gusle">Open Gusle</string>
+    <!-- The always-on display, under the bar of a paused song: e.g. "Paused at 1:23". -->
+    <string name="paused_at">Paused at %1$s</string>
     <string name="stop_playing">Stop playing</string>
     <string name="rescan_music">Rescan music</string>
     <string name="rescanning">Scanning…</string>
@@ -101,6 +103,11 @@
     <plurals name="seconds">
         <item quantity="one">%d second</item>
         <item quantity="other">%d seconds</item>
+    </plurals>
+    <!-- The always-on display, under the bar of a playing song: e.g. "2 min left". -->
+    <plurals name="minutes_left">
+        <item quantity="one">%d min left</item>
+        <item quantity="other">%d min left</item>
     </plurals>
     <plurals name="songs_found">
         <item quantity="one">%d song found</item>

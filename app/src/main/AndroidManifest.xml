@@ -30,8 +30,9 @@
             android:value="true" />
 
         <!-- Single-top: Gusle is one activity with its own navigation, so launching it again while
-             it's open (the launcher, waking from the always-on display, the media controls)
-             reaches the one there instead of stacking a second one on top. -->
+             it's open (the launcher, the media controls, waking to Gusle after the watch's own
+             always-on face covered it, e.g. a palm over a OnePlus watch) reaches the one there
+             instead of stacking a second one on top. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

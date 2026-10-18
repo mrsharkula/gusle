@@ -8,10 +8,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.wear.ambient.AmbientLifecycleObserver
 import androidx.wear.compose.material3.AppScaffold
 import com.sharkula.gusle.ui.GusleNavHost
 import com.sharkula.gusle.ui.NowPlayingRequest
 import com.sharkula.gusle.ui.access.MusicAccessGate
+import com.sharkula.gusle.ui.ambient.AmbientMode
+import com.sharkula.gusle.ui.ambient.AmbientState
+import com.sharkula.gusle.ui.ambient.LocalAmbient
 import com.sharkula.gusle.ui.songs.SongsGate
 import com.sharkula.gusle.ui.theme.GusleTheme
 import com.sharkula.gusle.ui.theme.LocalAppTheme
@@ -41,8 +45,18 @@ class MainActivity : ComponentActivity() {
     /** Set when the navigation goes back, until the next touch; see [dispatchTouchEvent]. */
     private var wentBack = false
 
+    /** Whether the watch shows Gusle's always-on display, which [ambientObserver] tells it. */
+    private val ambient = AmbientState()
+
+    /**
+     * Tells the watch that Gusle draws its own always-on display, rather than the watch dimming
+     * Gusle's screen or covering it with the watch face, and passes the watch's calls to [ambient].
+     */
+    private val ambientObserver = AmbientLifecycleObserver(this, ambient)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        lifecycle.addObserver(ambientObserver)
         // Not when the activity is created again, e.g. after a font size change: it was asked then.
         if (savedInstanceState == null) takeRequest(intent)
         // Reads the chosen theme and makes its colors off the main thread while the screen gets
@@ -55,12 +69,15 @@ class MainActivity : ComponentActivity() {
             // Nothing until it's known (it usually is by the first frame), so no screen, nor the
             // clock, shows in the default theme first. Around the gates, so their screens follow it.
             themes.current?.let { theme ->
-                CompositionLocalProvider(LocalAppTheme provides theme) {
+                CompositionLocalProvider(LocalAppTheme provides theme, LocalAmbient provides ambient) {
                     GusleTheme {
-                        AppScaffold {
-                            MusicAccessGate {
-                                SongsGate(library) { songs ->
-                                    GusleNavHost(songs, openNowPlaying, onWentBack = { wentBack = true })
+                        // Over every screen, the clock at the top too.
+                        AmbientMode(ambient) {
+                            AppScaffold {
+                                MusicAccessGate {
+                                    SongsGate(library) { songs ->
+                                        GusleNavHost(songs, openNowPlaying, onWentBack = { wentBack = true })
+                                    }
                                 }
                             }
                         }
@@ -68,6 +85,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // In case a call from the watch was missed while Gusle was off the screen.
+        ambient.sync(ambientObserver.isAmbient)
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {

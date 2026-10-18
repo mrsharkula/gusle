@@ -117,9 +117,9 @@ private class DesignViewConfiguration(screen: ViewConfiguration, scale: Float) :
 }
 
 /**
- * The design's text: the watch's font at [size] sp, in a line half as tall again, centered in it
- * as in the design, with a soft dark shadow that keeps it readable over a cover, [shadowOffset]
- * down and blurred over [shadowBlur].
+ * The design's text: the watch's font at [size] sp, in a line [lineHeight] tall (half as tall again
+ * unless given), centered in it as in the design, with a soft dark shadow that keeps it readable
+ * over a cover, [shadowOffset] down and blurred over [shadowBlur]; none at [shadowAlpha] 0.
  */
 @Composable
 fun designText(
@@ -128,15 +128,16 @@ fun designText(
     shadowAlpha: Float,
     shadowOffset: Dp = 1.dp,
     shadowBlur: Dp = 6.dp,
+    lineHeight: TextUnit = (size * 1.5f).sp,
 ): TextStyle {
     val offset = with(LocalDensity.current) { shadowOffset.toPx() }
     val blur = with(LocalDensity.current) { shadowBlur.toPx() }
     return MaterialTheme.typography.bodyMedium.copy(
         fontSize = size.sp,
         fontWeight = weight,
-        lineHeight = (size * 1.5f).sp,
+        lineHeight = lineHeight,
         lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
-        shadow = TextShadow(Color.Black.copy(alpha = shadowAlpha), Offset(0f, offset), blur),
+        shadow = if (shadowAlpha > 0f) TextShadow(Color.Black.copy(alpha = shadowAlpha), Offset(0f, offset), blur) else null,
     )
 }
 

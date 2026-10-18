@@ -226,8 +226,11 @@ private fun Below(shown: Boolean, depth: Int, content: @Composable () -> Unit) {
     }
 }
 
-/** Takes every touch before the content does, so a tap meant for the screen sliding in can't land here. */
-private val IgnoreTouches = Modifier.pointerInput(Unit) {
+/**
+ * Takes every touch before the content does: a tap meant for the screen sliding in, or one while
+ * the always-on display is over the screens, can't land here.
+ */
+internal val IgnoreTouches = Modifier.pointerInput(Unit) {
     awaitPointerEventScope {
         while (true) {
             awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }

@@ -102,6 +102,7 @@ dependencies {
     implementation(libs.navigation3.runtime)
     implementation(libs.navigation3.ui)
     implementation(libs.wear.tooling.preview)
+    implementation(libs.wear.ambient)
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
     implementation(libs.lifecycle.runtime.compose)

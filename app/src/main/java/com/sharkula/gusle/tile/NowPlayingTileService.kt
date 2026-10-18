@@ -27,6 +27,7 @@ import com.sharkula.gusle.OpenNowPlayingExtra
 import com.sharkula.gusle.coverColors
 import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.playback.PlaybackService
+import com.sharkula.gusle.playback.PlayerState
 import com.sharkula.gusle.playback.QueueSource
 import com.sharkula.gusle.playback.knownDurationMs
 import com.sharkula.gusle.playback.songId
