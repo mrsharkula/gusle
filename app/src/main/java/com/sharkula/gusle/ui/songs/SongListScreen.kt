@@ -16,19 +16,26 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.itemsIndexed
+import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.Text
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.sharkula.gusle.R
+import com.sharkula.gusle.data.Favorite
+import com.sharkula.gusle.data.FavoriteSongs
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.ui.components.ListButton
 import com.sharkula.gusle.ui.components.ListScreen
 import com.sharkula.gusle.ui.covers.rememberRowNoCoverPainter
+import com.sharkula.gusle.ui.favorites.FavoriteSwipe
+import com.sharkula.gusle.ui.favorites.rememberSwipeRows
 import com.sharkula.gusle.ui.theme.GusleTheme
 
 /**
- * A list of songs under its [title], with Shuffle all on top: All songs, or an artist's songs. The
- * player's song is marked. Tapping a song plays it and then the rest of the list, in its order.
+ * A list of songs under its [title], with Shuffle all on top: All songs, an artist's songs, or the
+ * favorites. The player's song is marked, and with [heartsShown], the [favorites]. Tapping a song
+ * plays it and then the rest of the list, in its order; swiping it left adds it to the favorites, or
+ * removes it ([onFavorite]).
  */
 @Composable
 fun SongListScreen(
@@ -37,15 +44,21 @@ fun SongListScreen(
     /** The player's song, playing or paused; null when there's none. */
     playing: Song?,
     isPlaying: Boolean,
+    favorites: FavoriteSongs,
     onShuffleAll: () -> Unit,
     /** Gets the tapped song's position in [songs]. */
     onSong: (index: Int) -> Unit,
     /** The player's song was tapped: it goes on as it is. */
     onPlayingSong: () -> Unit,
+    onFavorite: (song: Song, favorite: Boolean) -> Unit,
+    /** False where every song is a favorite: in Favorites itself. */
+    heartsShown: Boolean = true,
 ) {
     val noCover = rememberRowNoCoverPainter()
+    val listState = rememberTransformingLazyColumnState()
+    val swipeRows = rememberSwipeRows(listState)
 
-    ListScreen(title = title) { transformationSpec ->
+    ListScreen(title = title, listState = listState) { transformationSpec ->
         item(key = "shuffle all") {
             ListButton(
                 onClick = onShuffleAll,
@@ -68,14 +81,25 @@ fun SongListScreen(
             // Null for every row but the player's song's, so when the player changes, only the
             // rows it changes for are composed again.
             val isPlayingHere = if (song.id == playing?.id) isPlaying else null
-            SongRow(
-                song,
-                secondaryLabel = song.length,
-                isPlaying = isPlayingHere,
-                noCover = noCover,
-                transformationSpec = transformationSpec,
-                onClick = if (isPlayingHere != null) onPlayingSong else ({ onSong(index) }),
-            )
+            val isFavorite = song in favorites
+            FavoriteSwipe(
+                song.id,
+                isFavorite,
+                onToggle = { onFavorite(song, it) },
+                swipeRows,
+                transformationSpec,
+            ) { actions ->
+                SongRow(
+                    song,
+                    secondaryLabel = song.length,
+                    isPlaying = isPlayingHere,
+                    noCover = noCover,
+                    transformationSpec = transformationSpec,
+                    onClick = if (isPlayingHere != null) onPlayingSong else ({ onSong(index) }),
+                    modifier = actions,
+                    isFavorite = heartsShown && isFavorite,
+                )
+            }
         }
     }
 }
@@ -94,9 +118,11 @@ private fun SongListScreenPreview() {
             songs,
             playing = songs[2],
             isPlaying = true,
+            favorites = FavoriteSongs(mapOf(3L to Favorite(addedAtMs = 0, durationMs = null))),
             onShuffleAll = {},
             onSong = {},
             onPlayingSong = {},
+            onFavorite = { _, _ -> },
         )
     }
 }

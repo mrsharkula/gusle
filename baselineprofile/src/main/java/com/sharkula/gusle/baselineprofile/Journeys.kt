@@ -33,6 +33,10 @@ private const val ArtistsSong = "Old Meadow"
 private const val AlbumName = "Morning Songs"
 private const val AlbumsSong = "Zither Interlude"
 
+// Now playing's heart, and the button behind a swiped row, as screen readers name them.
+private const val AddFavorite = "Add to favorites"
+private const val RemoveFavorite = "Remove from favorites"
+
 /** How long to wait for something to come on the screen. */
 private const val WaitMs = 10_000L
 
@@ -94,10 +98,12 @@ private fun MacrobenchmarkScope.tapFirstSong() {
 }
 
 /**
- * Every screen, from Home, as a person uses them: All songs scrolled and a song played, seeking in
- * it, the next songs, the Queue scrolled and a song played from it, back to Home with its playing song, an
- * artist's song played from Artists and an album's from Albums, Settings with About, Stop playing,
- * and another theme. It ends with nothing playing, so no music plays on between runs, and in walnut.
+ * Every screen, from Home, as a person uses them: All songs scrolled and a song played, made a
+ * favorite with Now playing's heart, seeking in it, the next songs, the Queue scrolled and a song
+ * played from it, back to Home with its playing song, an artist's song played from Artists and an
+ * album's from Albums, the favorite played from Favorites and removed there with a swipe, Settings
+ * with About, Stop playing, and another theme. It ends with nothing playing and no favorites, so no
+ * music plays on between runs, and in walnut.
  */
 fun MacrobenchmarkScope.useEveryScreen() {
     tap("All songs")
@@ -108,11 +114,15 @@ fun MacrobenchmarkScope.useEveryScreen() {
     turnCrown(-6)
     scrollToAndTap(FirstSong, down = false)
 
-    // Now playing: the wavy ring, the cover and its colors, the volume arc.
+    // Now playing: the wavy ring, the cover and its colors, the volume arc, the heart.
     waitFor("Pause")
     waitFor(FirstSong)
     Thread.sleep(4_000)
     changeVolume()
+    // A run that stopped half way may have left it a favorite.
+    if (find(RemoveFavorite) != null) tap(RemoveFavorite)
+    tap(AddFavorite)
+    waitFor(RemoveFavorite)
     seek()
     // Song changes: the next cover, its colors, the transitions.
     for (song in NextSongs) {
@@ -186,6 +196,8 @@ fun MacrobenchmarkScope.useEveryScreen() {
     waitUntilGone("Gusle test songs")
     waitUntilStill("All songs")
 
+    useFavorites()
+
     // Settings is the edge button at the end of Home.
     repeat(2) { drag(down = true) }
     tap("Settings")
@@ -206,6 +218,40 @@ fun MacrobenchmarkScope.useEveryScreen() {
     openHome()
     useThemes()
     Thread.sleep(1_000)
+}
+
+/**
+ * From Home, with the first song of all its only favorite: opens Favorites from Home's row near its
+ * end, plays the song there, sees the Queue named after Favorites, and back in the list, swipes the
+ * song's row open and removes it, which leaves the empty screen. Back to Home from there.
+ */
+private fun MacrobenchmarkScope.useFavorites() {
+    scrollToAndTap("Favorites", down = true)
+    waitFor("Shuffle all")
+    scrollToAndTap(FirstSong, down = true)
+    waitFor("Pause")
+    waitFor(FirstSong)
+    Thread.sleep(2_500)
+    swipeLeft()
+    // The Queue, under the name of where its songs came from.
+    waitUntilStill("End of list")
+    waitFor("Favorites")
+    Thread.sleep(1_000)
+    pressBack()
+    waitUntilGone("End of list")
+    waitFor("Pause")
+    pressBack()
+    waitUntilGone("Next song")
+    waitUntilStill(FirstSong)
+    // Open, then the button behind it.
+    swipeRowLeft(FirstSong)
+    tap(RemoveFavorite)
+    waitFor("No favorites yet")
+    Thread.sleep(1_000)
+    pressBack()
+    waitUntilGone("No favorites yet")
+    // Home, scrolled to its row.
+    waitUntilStill("Favorites")
 }
 
 /**
@@ -247,7 +293,7 @@ private fun MacrobenchmarkScope.useThemes() {
         waitFor(theme)
         pressBack()
         // Home, still at its end.
-        waitFor("Playlists")
+        waitFor("Favorites")
         Thread.sleep(1_000)
     }
 }
@@ -389,6 +435,17 @@ private fun MacrobenchmarkScope.verticalSwipe(down: Boolean, fraction: Float): P
     // The finger moves up to go down the list.
     val (fromY, toY) = if (down) middle + half to middle - half else middle - half to middle + half
     return Point(x, fromY) to Point(x, toY)
+}
+
+/**
+ * Swipes the row with [title] a quarter of the screen to the left and lets go, which opens it on the
+ * button behind its end.
+ */
+private fun MacrobenchmarkScope.swipeRowLeft(title: String) {
+    val row = waitUntilStill(title)
+    val width = device.displayWidth
+    device.swipe(width * 3 / 4, row.centerY(), width / 2, row.centerY(), 20)
+    Thread.sleep(500)
 }
 
 /** Swipes left across the middle of the screen: Now playing's way to the Queue. */

@@ -5,7 +5,9 @@ import android.content.Context
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
+import com.sharkula.gusle.data.Favorites
 import com.sharkula.gusle.data.MusicLibrary
+import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.playback.LastPlayed
 import com.sharkula.gusle.playback.PlayingSong
 import com.sharkula.gusle.playback.PlayingSongHolder
@@ -46,6 +48,19 @@ class GusleApp : Application(), SingletonImageLoader.Factory {
     /** Asks for a new tile when what it shows changes. */
     val tileUpdates by lazy { TileUpdates(this) }
 
+    /**
+     * The favorite songs. Made, and read, as the screens or the tile first need them; from then on,
+     * matched with the songs whenever they're read ([Favorites.matchWith]).
+     */
+    val favorites by lazy {
+        Favorites(this, onChange = tileUpdates::changed).also { favorites ->
+            MainScope().launch {
+                favorites.load()
+                library.songs.collect { songs -> if (songs is Songs.Loaded) favorites.matchWith(songs.byId) }
+            }
+        }
+    }
+
     /** The secret that lets the tile open Now playing. */
     val nowPlayingKey by lazy { NowPlayingKey(this) }
 
@@ -81,6 +96,9 @@ val Context.playingSongHolder: PlayingSongHolder get() = (applicationContext as 
 
 /** The songs the playback service couldn't play; see [UnplayableSongs]. */
 val Context.unplayableSongs: UnplayableSongs get() = (applicationContext as GusleApp).unplayable
+
+/** The app's one [Favorites], from any of its contexts. */
+val Context.favorites: Favorites get() = (applicationContext as GusleApp).favorites
 
 /** The app's one [ThemeChoice], from any of its contexts. */
 val Context.themeChoice: ThemeChoice get() = (applicationContext as GusleApp).themeChoice

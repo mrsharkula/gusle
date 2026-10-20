@@ -39,7 +39,7 @@ private const val CoverQuality = 85
  * Part of every resources version, to bump when the icons change: the watch keeps a tile's
  * resources by their version, also across updates of Gusle.
  */
-private const val IconsVersion = "1"
+private const val IconsVersion = "2"
 
 /** Ends the version of a cover asked for again ([TileResources.version]). */
 private const val AgainSuffix = "again"
@@ -52,6 +52,8 @@ enum class TileIcon(@param:DrawableRes val drawable: Int) {
     Back(R.drawable.ic_replay_10),
     Forward(R.drawable.ic_forward_10),
     Next(R.drawable.ic_skip_next),
+    Favorite(R.drawable.ic_favorite),
+    NotFavorite(R.drawable.ic_favorite_outline),
     Note(R.drawable.ic_music_note);
 
     val id: String get() = "icon_" + name.lowercase()

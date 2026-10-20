@@ -83,9 +83,12 @@ class NowPlayingTileService : TileService() {
     private val app: GusleApp get() = application as GusleApp
 
     override fun onTileRequest(requestParams: TileRequest): ListenableFuture<Tile> = future {
-        val button = TileButton.of(requestParams.currentState.lastClickableId)
+        val clicked = requestParams.currentState.lastClickableId
         val songs = app.library.songsForTile()
-        val tapped = button?.let { withTimeoutOrNull(TapTimeoutMs) { tap(it, songs) } }
+        val tapped = when (val favoriteTap = FavoriteTap.of(clicked)) {
+            null -> TileButton.of(clicked)?.let { withTimeoutOrNull(TapTimeoutMs) { tap(it, songs) } }
+            else -> setFavorite(favoriteTap, songs)
+        }
         val (tile, look) = tile(requestParams.deviceConfiguration, songs, tapped ?: app.playing.state())
         app.tileUpdates.shown(requestParams.tileId, look)
         tile
@@ -113,7 +116,8 @@ class NowPlayingTileService : TileService() {
     /** The tile for [player], the player's state, from [songs], and how it looks. */
     private suspend fun tile(device: DeviceParameters, songs: Songs, player: PlayerState?): Pair<Tile, TileLook> {
         val theme = themeChoice.load()
-        var content = app.tileUpdates.versioned(TileContent.of(player, songs, tileCoverSizePx(), Instant.now()))
+        val favorites = app.favorites.load()
+        var content = app.tileUpdates.versioned(TileContent.of(player, songs, favorites, tileCoverSizePx(), Instant.now()))
         // The cover's colors, worked out from the picture read at the size the tile and Now playing
         // show it at when they aren't known yet. A cover that can't be read now is left out, rather
         // than kept by the watch as none, and tried again.
@@ -174,6 +178,18 @@ class NowPlayingTileService : TileService() {
             )
             .build()
         return TileLaunches(nowPlaying = clickable(launchNowPlaying, "now_playing"), home = clickable(launchGusle, "home"))
+    }
+
+    /**
+     * Makes the song the tile showed a favorite, or not, as its heart offered ([tap]): Gusle's own,
+     * so the playback service isn't started for it. Returns the player's state, as [tap] does.
+     */
+    private suspend fun setFavorite(tap: FavoriteTap, songs: Songs): PlayerState? {
+        (songs as? Songs.Loaded)?.byId?.get(tap.songId)?.let { song ->
+            app.favorites.load()
+            app.favorites.set(song, tap.favorite)
+        }
+        return app.playing.state()
     }
 
     /**

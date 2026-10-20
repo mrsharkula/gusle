@@ -30,7 +30,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
@@ -41,7 +40,6 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
-import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import com.sharkula.gusle.R
 import java.text.NumberFormat
@@ -172,12 +170,12 @@ private const val VolumeStart = 65f
 private const val VolumeEnd = 115f
 
 /**
- * The [volume] along the bottom: a short arc that fills from its left end, with a small speaker
- * above it in [iconColor]. The arc reads the volume only while drawing. Accessibility services
- * read it as a percentage and can change it.
+ * The [volume] along the bottom: a short arc that fills from its left end. The arc reads the volume
+ * only while drawing. Accessibility services read it as a percentage and can change it. Its speaker
+ * gave its place above the arc to the favorite heart (designs/v2/FAVORITES.md).
  */
 @Composable
-fun BoxScope.VolumeArc(volume: Volume, iconColor: Color) {
+fun BoxScope.VolumeArc(volume: Volume) {
     val levelColor = MaterialTheme.colorScheme.onSurface
     Spacer(
         Modifier.fillMaxSize().graphicsLayer().drawWithCache {
@@ -200,12 +198,12 @@ fun BoxScope.VolumeArc(volume: Volume, iconColor: Color) {
     val locale = LocalConfiguration.current.locales[0]
     val percent = remember(locale) { NumberFormat.getPercentInstance(locale) }
     val fraction = volume.fraction
-    // Around the speaker and the arc, so accessibility services outline them together.
+    // Around the arc, below the heart above it, so accessibility services outline each on its own.
     Box(
         Modifier
             .align(Alignment.TopCenter)
-            .padding(top = 195.dp)
-            .size(width = 90.dp, height = 22.dp)
+            .padding(top = 205.dp)
+            .size(width = 90.dp, height = 14.dp)
             .semantics {
                 contentDescription = description
                 stateDescription = percent.format(fraction)
@@ -217,14 +215,7 @@ fun BoxScope.VolumeArc(volume: Volume, iconColor: Color) {
                     }
                 }
             },
-    ) {
-        Icon(
-            painterResource(R.drawable.ic_volume_up),
-            contentDescription = null,
-            modifier = Modifier.align(Alignment.TopCenter).size(13.dp),
-            tint = iconColor,
-        )
-    }
+    )
 }
 
 private val VolumeTrack = Color.White.copy(alpha = 0.18f)

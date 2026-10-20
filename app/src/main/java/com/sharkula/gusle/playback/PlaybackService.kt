@@ -139,7 +139,9 @@ class PlaybackService : MediaSessionService() {
         sessionPlayer = SessionPlayer(
             exoPlayer,
             unplayable,
-            nameOf = { source -> source.name(musicLibrary.songs.value as? Songs.Loaded, resources) },
+            describe = { source ->
+                queueMetadata(source.name(musicLibrary.songs.value as? Songs.Loaded, resources), source)
+            },
         )
         player.addListener(followPlayer)
         val lookup = SongLookup(musicLibrary, lastPlayed, packageName, scope, stopAndForget = { stopAndForget(player) })

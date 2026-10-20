@@ -29,6 +29,7 @@ import androidx.wear.protolayout.layout.row
 import androidx.wear.protolayout.layout.spacer
 import androidx.wear.protolayout.material3.ButtonColors
 import androidx.wear.protolayout.material3.MaterialScope
+import androidx.wear.protolayout.material3.PrimaryLayoutMargins
 import androidx.wear.protolayout.material3.Typography
 import androidx.wear.protolayout.material3.buttonGroup
 import androidx.wear.protolayout.material3.iconButton
@@ -68,8 +69,11 @@ private const val ButtonFillAlpha = 0.32f
 /** The bar's track: the text color at this opacity. */
 private const val TrackAlpha = 0.2f
 
+/** The round buttons over the cover are this tall (dp): five in a row only fit at less than 48. */
+private const val ButtonSize = 40f
+
 /** The buttons' icons are this large (dp), the edge button's this large: Material's sizes. */
-private const val ButtonIconSize = 26f
+private const val ButtonIconSize = 24f
 private const val EdgeButtonIconSize = 24f
 
 /** What the tile shows. */
@@ -80,6 +84,8 @@ sealed interface TileShows {
      * cover; not in a preview.
      */
     data class Song(
+        /** The song's [com.sharkula.gusle.data.Song.id], which its heart's tap names ([FavoriteTap]). */
+        val songId: Long,
         val title: String,
         val artist: String?,
         val isPlaying: Boolean,
@@ -87,6 +93,7 @@ sealed interface TileShows {
         val durationMs: Long,
         val at: Instant,
         val hasCover: Boolean,
+        val isFavorite: Boolean = false,
     ) : TileShows {
         /** Its length, in whole seconds, as the tile shows it. */
         val durationS: Int get() = (durationMs / 1000).toInt().coerceAtLeast(0)
@@ -128,10 +135,36 @@ enum class TileButton(val id: String) {
 }
 
 /**
+ * A tap on the tile's heart, as its ID comes back in the tile request: it makes the song the tile
+ * showed ([songId]) a favorite, or not, as the heart then offered ([favorite]), whatever has changed
+ * since, e.g. the next song playing, or the heart tapped on Now playing.
+ */
+data class FavoriteTap(val songId: Long, val favorite: Boolean) {
+    val id: String get() = "$FavoritePrefix$songId:${if (favorite) 1 else 0}"
+
+    companion object {
+        /** The tap with this [id], or null when it isn't the heart's. */
+        fun of(id: String?): FavoriteTap? {
+            if (id == null || !id.startsWith(FavoritePrefix)) return null
+            val parts = id.removePrefix(FavoritePrefix).split(':')
+            val songId = parts.getOrNull(0)?.toLongOrNull() ?: return null
+            return when (parts.getOrNull(1)) {
+                "1" -> FavoriteTap(songId, favorite = true)
+                "0" -> FavoriteTap(songId, favorite = false)
+                else -> null
+            }
+        }
+    }
+}
+
+private const val FavoritePrefix = "favorite:"
+
+/**
  * The tile's layout: [shows] in [colors] (a song's cover's, or the app theme's), on a black
  * background, as chosen in designs/v2/TILE.md (3d): the cover dimmed behind, the title and artist,
- * previous, −10 s, +10 s and next, the time and a bar under them, and play/pause in the edge button.
- * Material 3 tile parts throughout, with Gusle's own colors rather than the watch's.
+ * previous, −10 s, the favorite heart, +10 s and next (designs/v2/FAVORITES.md), the time and a bar
+ * under them, and play/pause in the edge button. Material 3 tile parts throughout, with Gusle's own
+ * colors rather than the watch's.
  */
 fun tileLayout(
     context: Context,
@@ -165,17 +198,31 @@ private fun MaterialScope.songLayout(
             column(
                 songText(song, launches.nowPlaying),
                 spacer(height = dp(4f)),
-                buttonGroup(height = dp(48f)) {
-                    buttonGroupItem { songButton(context, TileButton.Previous, TileIcon.Previous, R.string.previous_song) }
-                    buttonGroupItem { songButton(context, TileButton.Back, TileIcon.Back, R.string.back_10_seconds) }
-                    buttonGroupItem { songButton(context, TileButton.Forward, TileIcon.Forward, R.string.forward_10_seconds) }
-                    buttonGroupItem { songButton(context, TileButton.Next, TileIcon.Next, R.string.next_song) }
+                // Five in a row only fit smaller than the usual 48 dp, and with the least margin.
+                buttonGroup(height = dp(ButtonSize)) {
+                    buttonGroupItem {
+                        songButton(context, TileButton.Previous.id, TileIcon.Previous, R.string.previous_song)
+                    }
+                    buttonGroupItem { songButton(context, TileButton.Back.id, TileIcon.Back, R.string.back_10_seconds) }
+                    buttonGroupItem {
+                        songButton(
+                            context,
+                            FavoriteTap(song.songId, favorite = !song.isFavorite).id,
+                            if (song.isFavorite) TileIcon.Favorite else TileIcon.NotFavorite,
+                            if (song.isFavorite) R.string.remove_from_favorites else R.string.add_to_favorites,
+                        )
+                    }
+                    buttonGroupItem {
+                        songButton(context, TileButton.Forward.id, TileIcon.Forward, R.string.forward_10_seconds)
+                    }
+                    buttonGroupItem { songButton(context, TileButton.Next.id, TileIcon.Next, R.string.next_song) }
                 },
                 spacer(height = dp(6f)),
                 progress(song, colors, BarWidth * scale),
                 width = expand(),
             )
         },
+        margins = PrimaryLayoutMargins.MIN_PRIMARY_LAYOUT_MARGIN,
         bottomSlot = {
             val button = if (song.isPlaying) TileButton.Pause else TileButton.Play
             iconEdgeButton(
@@ -241,16 +288,19 @@ private fun MaterialScope.songText(song: TileShows.Song, openNowPlaying: Clickab
     )
 }
 
-/** One of the round, see-through buttons over the cover, which [button] names to the tile request. */
+/**
+ * One of the round, see-through buttons over the cover, which [clickId] names to the tile request
+ * ([TileButton.id] or [FavoriteTap.id]).
+ */
 private fun MaterialScope.songButton(
     context: Context,
-    button: TileButton,
+    clickId: String,
     icon: TileIcon,
     @StringRes label: Int,
 ): LayoutElement {
     val primary = colorScheme.primary.staticArgb
     return iconButton(
-        onClick = clickable(loadAction(), button.id),
+        onClick = clickable(loadAction(), clickId),
         modifier = LayoutModifier.contentDescription(context.getString(label)),
         width = expand(),
         height = expand(),

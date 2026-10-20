@@ -2,13 +2,11 @@ package com.sharkula.gusle.ui.home
 
 import android.net.Uri
 import androidx.annotation.DrawableRes
-import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumnItemScope
-import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.EdgeButtonSize
@@ -26,30 +24,25 @@ import com.sharkula.gusle.ui.songs.SongRow
 import com.sharkula.gusle.ui.theme.GusleTheme
 import com.sharkula.gusle.ui.theme.seedColorScheme
 
-private data class Source(@DrawableRes val icon: Int, @StringRes val label: Int)
-
-// Shown on Home but not available yet.
-private val laterSources = listOf(
-    Source(R.drawable.ic_queue_music, R.string.playlists),
-)
-
 @Composable
 fun HomeScreen(
     songCount: Int,
     artistCount: Int,
     albumCount: Int,
+    favoriteCount: Int,
     /** The player's song, playing or paused, shown on top; null when there's none. */
     playing: Song?,
     isPlaying: Boolean,
+    /** Whether the song on top is a favorite, which its row shows. */
+    playingIsFavorite: Boolean,
     /** The song on top was tapped. */
     onPlaying: () -> Unit,
     onAllSongs: () -> Unit,
     onArtists: () -> Unit,
     onAlbums: () -> Unit,
+    onFavorites: () -> Unit,
     onSettings: () -> Unit,
 ) {
-    val laterColors = ButtonDefaults.filledTonalButtonColors()
-
     ListScreen(
         title = stringResource(R.string.home_title),
         edgeButton = {
@@ -72,6 +65,7 @@ fun HomeScreen(
                     noCover = rememberRowNoCoverPainter(),
                     transformationSpec = transformationSpec,
                     onClick = onPlaying,
+                    isFavorite = playingIsFavorite,
                 )
             }
         }
@@ -104,21 +98,14 @@ fun HomeScreen(
                 transformationSpec = transformationSpec,
             )
         }
-        items(laterSources, key = { it.label }) { source ->
-            ListButton(
-                onClick = {},
+        // Where Playlists will go, once there are playlists.
+        item(key = "favorites") {
+            SourceButton(
+                icon = R.drawable.ic_favorite,
+                label = stringResource(R.string.favorites),
+                count = pluralStringResource(R.plurals.song_count, favoriteCount, favoriteCount),
+                onClick = onFavorites,
                 transformationSpec = transformationSpec,
-                enabled = false,
-                colors = laterColors,
-                icon = {
-                    // Disabled: the circle uses the button's own disabled container color;
-                    // the icon keeps its disabled content color.
-                    IconCircle(
-                        icon = source.icon,
-                        background = laterColors.disabledContainerColor,
-                    )
-                },
-                label = { Text(stringResource(source.label)) },
             )
         }
     }
@@ -166,12 +153,15 @@ private fun HomeScreenPreview() {
             songCount = 51,
             artistCount = 6,
             albumCount = 35,
+            favoriteCount = 0,
             playing = null,
             isPlaying = false,
+            playingIsFavorite = false,
             onPlaying = {},
             onAllSongs = {},
             onArtists = {},
             onAlbums = {},
+            onFavorites = {},
             onSettings = {},
         )
     }
@@ -188,12 +178,15 @@ private fun HomeScreenPlayingPreview() {
             songCount = 51,
             artistCount = 6,
             albumCount = 35,
+            favoriteCount = 4,
             playing = previewSong,
             isPlaying = true,
+            playingIsFavorite = true,
             onPlaying = {},
             onAllSongs = {},
             onArtists = {},
             onAlbums = {},
+            onFavorites = {},
             onSettings = {},
         )
     }
@@ -208,12 +201,15 @@ private fun HomeScreenPlayingCoverPreview() {
             songCount = 51,
             artistCount = 6,
             albumCount = 35,
+            favoriteCount = 4,
             playing = previewSong,
             isPlaying = true,
+            playingIsFavorite = true,
             onPlaying = {},
             onAllSongs = {},
             onArtists = {},
             onAlbums = {},
+            onFavorites = {},
             onSettings = {},
         )
     }

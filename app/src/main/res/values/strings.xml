@@ -2,7 +2,14 @@
     <string name="app_name">Gusle</string>
     <string name="home_title">Gusle</string>
     <string name="all_songs">All songs</string>
-    <string name="playlists">Playlists</string>
+    <string name="favorites">Favorites</string>
+    <!-- The heart on Now playing and the tile, and a swiped row's button, as screen readers say them. -->
+    <string name="add_to_favorites">Add to favorites</string>
+    <string name="remove_from_favorites">Remove from favorites</string>
+    <!-- The small heart on a favorite song's row, as screen readers say it. -->
+    <string name="favorite">Favorite</string>
+    <string name="no_favorites_title">No favorites yet</string>
+    <string name="no_favorites_text">Tap the heart on Now playing, or swipe a song left.</string>
     <string name="albums">Albums</string>
     <string name="artists">Artists</string>
     <!-- Stands for the artist of the songs without one: in Artists, and as their songs' title. -->

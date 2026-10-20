@@ -58,13 +58,21 @@ import androidx.wear.compose.material3.lazy.TransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.sharkula.gusle.R
+import com.sharkula.gusle.data.Favorite
+import com.sharkula.gusle.data.FavoriteSongs
 import com.sharkula.gusle.data.Song
+import com.sharkula.gusle.playback.QueueSource
 import com.sharkula.gusle.playback.playOrder
 import com.sharkula.gusle.playback.queueName
+import com.sharkula.gusle.playback.queueSource
 import com.sharkula.gusle.playback.songId
 import com.sharkula.gusle.ui.components.ListScreen
 import com.sharkula.gusle.ui.components.edgeTransformation
 import com.sharkula.gusle.ui.covers.rememberRowNoCoverPainter
+import com.sharkula.gusle.ui.favorites.FavoriteSwipe
+import com.sharkula.gusle.ui.favorites.rememberFavorites
+import com.sharkula.gusle.ui.favorites.rememberSetFavorite
+import com.sharkula.gusle.ui.favorites.rememberSwipeRows
 import com.sharkula.gusle.ui.playback.PlayerConnection
 import com.sharkula.gusle.ui.playback.rememberShownPlayer
 import com.sharkula.gusle.ui.songs.SongRow
@@ -95,7 +103,8 @@ private val Dimmed = Modifier.graphicsLayer {
  * artist) and a shuffle toggle; opened from Now playing. It opens on the player's song, with the
  * songs played before it above, dimmed, and it follows the player wherever it's controlled from.
  * Tapping a song plays it, in the same order; tapping the player's song goes back to Now playing
- * ([onPlayingSong]).
+ * ([onPlayingSong]). Swiping a song left adds it to the favorites, or removes it; their hearts show
+ * unless the songs came from the favorites and still all are.
  */
 @OptIn(UnstableApi::class) // rememberPlayPauseButtonState, rememberShuffleButtonState
 @Composable
@@ -111,9 +120,19 @@ fun QueueScreen(connection: PlayerConnection, songsById: Map<Long, Song>, onPlay
     val playPause = rememberPlayPauseButtonState(player)
     val shuffle = rememberShuffleButtonState(player)
     val unplayable by LocalContext.current.unplayableSongs.songIds.collectAsStateWithLifecycle()
+    val favorites = rememberFavorites()
+    val queue = state.queue
+    val source = state.source
+    // Left out where every song would have one: in a queue from the favorites, while every song in it
+    // still is one. Once one isn't, the hearts tell them apart.
+    val heartsShown = remember(queue, source, favorites, songsById) {
+        source != QueueSource.Favorites || queue.songs.any { songsById.getValue(it.songId) !in favorites }
+    }
     Queue(
-        queue = state.queue,
+        queue = queue,
         name = state.name,
+        favorites = favorites,
+        heartsShown = heartsShown,
         songsById = songsById,
         current = state.current,
         isPlaying = !playPause.showPlay,
@@ -128,6 +147,7 @@ fun QueueScreen(connection: PlayerConnection, songsById: Map<Long, Song>, onPlay
             }
         },
         onPlayingSong = onPlayingSong,
+        onFavorite = rememberSetFavorite(),
     )
 }
 
@@ -161,6 +181,8 @@ private class QueueState(private val player: Player, private val songsById: Map<
         private set
     var name by mutableStateOf(player.queueName)
         private set
+    var source by mutableStateOf(player.queueSource)
+        private set
 
     override fun onEvents(player: Player, events: Player.Events) = update()
 
@@ -168,6 +190,7 @@ private class QueueState(private val player: Player, private val songsById: Map<
     fun update() {
         current = player.currentMediaItemIndex
         name = player.queueName
+        source = player.queueSource
         val newTimeline = player.currentTimeline
         val newShuffled = player.shuffleModeEnabled
         if (newTimeline === timeline && newShuffled == shuffled) return
@@ -197,6 +220,9 @@ private fun Queue(
     queue: PlayerQueue,
     /** The queue's name, after where its songs came from ([queueName]); All songs when it has none. */
     name: String?,
+    favorites: FavoriteSongs,
+    /** False where every song is a favorite, as in a queue from the favorites. */
+    heartsShown: Boolean,
     /** The songs on the watch, which include every song in the [queue]. */
     songsById: Map<Long, Song>,
     /** The player's item it's on. */
@@ -209,6 +235,7 @@ private fun Queue(
     /** Gets the player's item to jump to. */
     onSong: (window: Int) -> Unit,
     onPlayingSong: () -> Unit,
+    onFavorite: (song: Song, favorite: Boolean) -> Unit,
 ) {
     val currentPlace = queue.placeOf(current)
     // The player's song in the middle from the first frame, with the songs played before it above.
@@ -228,6 +255,7 @@ private fun Queue(
     }
     val noCover = rememberRowNoCoverPainter()
     val cantPlay = stringResource(R.string.cant_play)
+    val swipeRows = rememberSwipeRows(listState)
 
     ListScreen(title = name ?: stringResource(R.string.all_songs), listState = listState) { transformationSpec ->
         item(key = "shuffle") {
@@ -240,21 +268,32 @@ private fun Queue(
             // it changes for are composed again.
             val isPlayingHere = if (entry.window == current) isPlaying else null
             val canPlay = song.id !in unplayable
-            SongRow(
-                song,
-                secondaryLabel = when {
-                    !canPlay -> cantPlay
-                    isPlayingHere != null -> song.artist
-                    else -> song.length
-                },
-                isPlaying = isPlayingHere,
-                noCover = noCover,
-                transformationSpec = transformationSpec,
-                // Rather than starting it again: on a watch, taps happen by accident.
-                onClick = if (isPlayingHere != null) onPlayingSong else ({ onSong(entry.window) }),
-                modifier = if (entry.place < currentPlace || !canPlay) Dimmed else Modifier,
-                minHeight = RowHeight,
-            )
+            val isFavorite = song in favorites
+            // By the song, rather than the row's item: a row may come to show another song.
+            FavoriteSwipe(
+                song.id,
+                isFavorite,
+                onToggle = { onFavorite(song, it) },
+                swipeRows,
+                transformationSpec,
+            ) { actions ->
+                SongRow(
+                    song,
+                    secondaryLabel = when {
+                        !canPlay -> cantPlay
+                        isPlayingHere != null -> song.artist
+                        else -> song.length
+                    },
+                    isPlaying = isPlayingHere,
+                    noCover = noCover,
+                    transformationSpec = transformationSpec,
+                    // Rather than starting it again: on a watch, taps happen by accident.
+                    onClick = if (isPlayingHere != null) onPlayingSong else ({ onSong(entry.window) }),
+                    modifier = actions.then(if (entry.place < currentPlace || !canPlay) Dimmed else Modifier),
+                    minHeight = RowHeight,
+                    isFavorite = heartsShown && isFavorite,
+                )
+            }
         }
         item(key = "end") {
             Text(
@@ -332,6 +371,8 @@ private fun QueueShuffleOffPreview() {
         Queue(
             queue = PlayerQueue.of(listOf(0, 1, 2), shuffled = false, { previewSongs[it].id }, onWatch = { true }),
             name = "Test Ensemble",
+            favorites = FavoriteSongs(mapOf(1L to Favorite(addedAtMs = 0, durationMs = null))),
+            heartsShown = true,
             songsById = previewSongs.associateBy { it.id },
             current = 1,
             isPlaying = true,
@@ -340,6 +381,7 @@ private fun QueueShuffleOffPreview() {
             onShuffle = {},
             onSong = {},
             onPlayingSong = {},
+            onFavorite = { _, _ -> },
         )
     }
 }
@@ -351,6 +393,8 @@ private fun QueueShuffleOnPreview() {
         Queue(
             queue = PlayerQueue.of(listOf(1, 2, 0), shuffled = true, { previewSongs[it].id }, onWatch = { true }),
             name = null,
+            favorites = FavoriteSongs.None,
+            heartsShown = true,
             songsById = previewSongs.associateBy { it.id },
             current = 1,
             isPlaying = true,
@@ -359,6 +403,7 @@ private fun QueueShuffleOnPreview() {
             onShuffle = {},
             onSong = {},
             onPlayingSong = {},
+            onFavorite = { _, _ -> },
         )
     }
 }

@@ -115,6 +115,9 @@ import com.sharkula.gusle.ui.components.rememberLengthInWords
 import com.sharkula.gusle.ui.components.rememberMayAnimate
 import com.sharkula.gusle.ui.components.rememberScreenShown
 import com.sharkula.gusle.ui.covers.CoverArt
+import com.sharkula.gusle.ui.favorites.FavoriteHeart
+import com.sharkula.gusle.ui.favorites.rememberFavorites
+import com.sharkula.gusle.ui.favorites.rememberSetFavorite
 import com.sharkula.gusle.ui.heldWhileHidden
 import com.sharkula.gusle.ui.playback.PlayerConnection
 import com.sharkula.gusle.ui.playback.rememberShownPlayer
@@ -193,6 +196,8 @@ private fun NowPlaying(
     // Below another screen, e.g. the seek screen, they follow a new song a moment later, as other
     // hidden screens do, from the art that screen read rather than reading the cover twice at once.
     val art = rememberCoverArt(heldWhileHidden(song))
+    val favorites = rememberFavorites()
+    val setFavorite = rememberSetFavorite()
 
     NowPlaying(
         // Nothing to play, e.g. when Gusle left the screen before a tap reached the player, and the
@@ -210,6 +215,9 @@ private fun NowPlaying(
         animate = animate,
         volume = volume,
         shuffleOn = shuffle.shuffleOn,
+        // The song as it's on the watch; none for one deleted while it plays, which disables the heart.
+        isFavorite = song != null && song in favorites,
+        onFavorite = remember(song, setFavorite) { song?.let { { favorite: Boolean -> setFavorite(it, favorite) } } },
         cantPlay = cantPlay::value,
         onPrevious = onPrevious,
         onPlayPause = onPlayPause,
@@ -268,6 +276,10 @@ private fun NowPlaying(
     volume: Volume,
     /** Shows a small shuffle icon while the songs play in random order. */
     shuffleOn: Boolean,
+    /** Whether the song is a favorite, which the heart along the bottom shows. */
+    isFavorite: Boolean,
+    /** A tap on the heart, with what it's to be; null while there's no song, which disables it. */
+    onFavorite: ((favorite: Boolean) -> Unit)?,
     /** The song that just failed, to say it can't be played; null otherwise. Read only by the message. */
     cantPlay: () -> UnplayableSongs.Failure?,
     /** Null while there's nothing to go back to, which disables the button; likewise the others. */
@@ -333,9 +345,10 @@ private fun NowPlaying(
                         style = designText(12, FontWeight.Normal, shadowAlpha = 0.85f),
                     )
                 }
-                VolumeArc(volume, iconColor = artistColor())
+                VolumeArc(volume)
                 if (shuffleOn) {
-                    // Left of the speaker, 8 dp apart; the speaker stays in the middle.
+                    // Left of the heart, 21 dp left of the middle, as it was of the speaker (6.5 dp
+                    // from the heart, which is wider); the heart stays in the middle.
                     ShuffleIcon(
                         Modifier
                             .align(Alignment.TopCenter)
@@ -343,6 +356,16 @@ private fun NowPlaying(
                             .offset(x = (-21).dp),
                     )
                 }
+                // Above the volume arc, in the middle, where the speaker was (designs/v2/FAVORITES.md,
+                // E). The heart is 16 dp, 194 dp down; its touch target reaches over the arc, which
+                // takes no taps.
+                FavoriteHeart(
+                    isFavorite,
+                    onFavorite,
+                    outlineColor = artistColor(),
+                    iconSize = 16.dp,
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 178.dp),
+                )
             }
         }
     }
@@ -752,6 +775,7 @@ private fun NowPlayingPreview() {
         art = rememberStandInArt(),
         isPlaying = true,
         shuffleOn = true,
+        isFavorite = true,
     )
 }
 
@@ -764,11 +788,19 @@ private fun NowPlayingNoCoverPreview() {
         art = CoverArt(null, null, null),
         isPlaying = false,
         shuffleOn = false,
+        isFavorite = false,
     )
 }
 
 @Composable
-private fun NowPlayingPreview(title: String, artist: String?, art: CoverArt, isPlaying: Boolean, shuffleOn: Boolean) {
+private fun NowPlayingPreview(
+    title: String,
+    artist: String?,
+    art: CoverArt,
+    isPlaying: Boolean,
+    shuffleOn: Boolean,
+    isFavorite: Boolean,
+) {
     GusleTheme {
         AppScaffold {
             ScreenScaffold {
@@ -783,6 +815,8 @@ private fun NowPlayingPreview(title: String, artist: String?, art: CoverArt, isP
                     animate = false,
                     volume = PreviewVolume,
                     shuffleOn = shuffleOn,
+                    isFavorite = isFavorite,
+                    onFavorite = {},
                     cantPlay = { null },
                     onPrevious = {},
                     onPlayPause = {},

@@ -28,7 +28,8 @@ class SessionPlayerTest {
     private fun player(current: Int, shuffleOrder: List<Int>? = null): Pair<SessionPlayer, FakePlayer> {
         val fake = FakePlayer(listOf(10L, 20L, 30L, 40L), shuffleOrder)
         fake.current = current
-        return SessionPlayer(fake.player, unplayable, nameOf = { source -> "Named $source" }, Random(7)) to fake
+        val describe = { source: QueueSource -> MediaMetadata.Builder().setTitle("Named $source").build() }
+        return SessionPlayer(fake.player, unplayable, describe, Random(7)) to fake
     }
 
     @Test

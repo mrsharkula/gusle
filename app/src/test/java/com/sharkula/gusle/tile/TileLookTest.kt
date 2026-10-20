@@ -1,6 +1,8 @@
 package com.sharkula.gusle.tile
 
 import android.net.TestUri
+import com.sharkula.gusle.data.Favorite
+import com.sharkula.gusle.data.FavoriteSongs
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.playback.PlayerState
@@ -25,10 +27,11 @@ class TileLookTest {
         durationMs: Long? = null,
         at: Instant = this.at,
         songs: Songs = this.songs,
+        favorites: FavoriteSongs = FavoriteSongs.None,
         themeId: String = "walnut",
     ): TileLook {
         val player = song?.let { PlayerState(it.id, isPlaying, positionMs, durationMs) }
-        return TileLook.of(TileContent.of(player, songs, coverSizePx = 314, at), themeId)
+        return TileLook.of(TileContent.of(player, songs, favorites, coverSizePx = 314, at), themeId)
     }
 
     /** What a tap on the tile showed, and the player a moment later, where it took a moment to start. */
@@ -73,6 +76,15 @@ class TileLookTest {
         assertFalse(shown.isLike(look(yamato, durationMs = 226_000)))
     }
 
+    /** E.g. once the heart was tapped on Now playing. */
+    @Test
+    fun aFavoriteLooksDifferent() {
+        val favorite = FavoriteSongs(mapOf(yamato.id to Favorite(addedAtMs = 1_000, durationMs = yamato.durationMs)))
+        assertFalse(look(yamato).isLike(look(yamato, favorites = favorite)))
+        // Only the song shown counts.
+        assertTrue(look(ghostDivision).isLike(look(ghostDivision, favorites = favorite)))
+    }
+
     @Test
     fun anotherThemeLooksDifferent() {
         assertFalse(look(yamato).isLike(look(yamato, themeId = "adriatic")))
@@ -82,7 +94,7 @@ class TileLookTest {
     /** A cover that couldn't be read is left out, and tried again the next time. */
     @Test
     fun aSongWithoutItsCoverLooksDifferent() {
-        val content = TileContent.of(PlayerState(yamato.id, true, 83_000, null), songs, 314, at)
+        val content = TileContent.of(PlayerState(yamato.id, true, 83_000, null), songs, FavoriteSongs.None, 314, at)
         assertFalse(TileLook.of(content.withoutCover(), "walnut").isLike(TileLook.of(content, "walnut")))
     }
 

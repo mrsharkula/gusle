@@ -14,6 +14,7 @@ class QueueSourceTest {
             QueueSource.Artist(null),
             QueueSource.Album("three days grace\none-x"),
             QueueSource.Album(null),
+            QueueSource.Favorites,
         )
         for (source in sources) {
             assertEquals(source, QueueSource.decode(source.encoded))
@@ -42,6 +43,15 @@ class QueueSourceTest {
         val album = QueueSource.Album("three days grace\nthree days grace")
         assertNotEquals(artist.encoded, album.encoded)
         assertEquals(album, QueueSource.decode(album.encoded))
+    }
+
+    /** An artist or album named "favorites" isn't the favorite songs. */
+    @Test
+    fun keepsTheFavoritesApartFromAnArtistOrAlbumOfThatName() {
+        for (named in listOf(QueueSource.Artist("favorites"), QueueSource.Album("favorites\nfavorites"))) {
+            assertNotEquals(QueueSource.Favorites.encoded, named.encoded)
+            assertEquals(named, QueueSource.decode(named.encoded))
+        }
     }
 
     @Test

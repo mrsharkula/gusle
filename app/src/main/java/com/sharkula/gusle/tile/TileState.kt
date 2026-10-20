@@ -3,6 +3,7 @@ package com.sharkula.gusle.tile
 import android.content.Context
 import android.view.WindowManager
 import androidx.media3.common.Player
+import com.sharkula.gusle.data.FavoriteSongs
 import com.sharkula.gusle.data.MusicLibrary
 import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.playback.PlayerState
@@ -80,15 +81,17 @@ internal data class TileContent(
     companion object {
         /**
          * What the tile shows of [player] (null: no song) at [at], from [songs]: its song, with the
-         * cover behind it, or nothing to play when there's none, or it's gone from the watch.
+         * cover behind it and whether it's among the [favorites], or nothing to play when there's
+         * none, or it's gone from the watch.
          */
-        fun of(player: PlayerState?, songs: Songs, coverSizePx: Int, at: Instant): TileContent {
+        fun of(player: PlayerState?, songs: Songs, favorites: FavoriteSongs, coverSizePx: Int, at: Instant): TileContent {
             val loaded = songs as? Songs.Loaded
             val song = player?.songId?.let { loaded?.byId?.get(it) }
             if (player == null || song == null) {
                 return TileContent(TileShows.Nothing(canShuffle = loaded?.list?.isNotEmpty() == true), null, coverSizePx)
             }
             val shows = TileShows.Song(
+                songId = song.id,
                 title = song.title,
                 artist = song.artist,
                 isPlaying = player.isPlaying,
@@ -97,6 +100,7 @@ internal data class TileContent(
                 at = at,
                 // A song without a cover gets a black dot, which doesn't show (TileResources).
                 hasCover = true,
+                isFavorite = song in favorites,
             )
             return TileContent(shows, SongCover(song), coverSizePx)
         }
@@ -130,10 +134,13 @@ data class TileLook(val still: String, val countsFromMs: Long?) {
                 is TileShows.Nothing -> listOf("nothing", shows.canShuffle)
                 is TileShows.Song -> listOf(
                     "song",
+                    // Its heart's tap names it.
+                    shows.songId,
                     shows.title,
                     shows.artist,
                     shows.hasCover,
                     shows.isPlaying,
+                    shows.isFavorite,
                     shows.durationS,
                     // A paused song's time stands still; a playing one's counts.
                     if (shows.counts) "counts" else shows.positionS,

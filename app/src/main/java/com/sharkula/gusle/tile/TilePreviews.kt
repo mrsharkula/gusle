@@ -19,6 +19,7 @@ import java.time.Instant
 private val yamatoColors by lazy { seedColorScheme(0xFF93291C.toInt()) }
 
 private fun song(isPlaying: Boolean) = TileShows.Song(
+    songId = 1,
     title = "Yamato",
     artist = "Sabaton",
     isPlaying = isPlaying,
@@ -45,6 +46,9 @@ fun playingTilePreview(context: Context) = preview(context, song(isPlaying = tru
 
 @Preview(device = WearDevices.LARGE_ROUND, name = "Paused")
 fun pausedTilePreview(context: Context) = preview(context, song(isPlaying = false), yamatoColors)
+
+@Preview(device = WearDevices.LARGE_ROUND, name = "A favorite")
+fun favoriteTilePreview(context: Context) = preview(context, song(isPlaying = true).copy(isFavorite = true), yamatoColors)
 
 @Preview(device = WearDevices.LARGE_ROUND, name = "No cover: the app theme")
 fun noCoverTilePreview(context: Context) =

@@ -37,7 +37,7 @@ private const val CoverRetries = 2
 
 /**
  * Asks the system for a new tile when what it shows changes: the song, whether it plays, where it
- * is after a jump, the songs there are, or the app theme. It remembers how the tile looked when it
+ * is after a jump, whether it's a favorite, the songs there are, or the app theme. It remembers how the tile looked when it
  * was last made ([TileLook], [TileRecord]), and asks only when it would look different now: not for
  * what a tap on the tile has shown already, but for whatever the player did after, e.g. moving on
  * to the next song once a jump reached the end. It asks once for every change within
@@ -117,7 +117,13 @@ class TileUpdates(private val app: GusleApp) {
 
     /** How the tile would look if it were made now, as [NowPlayingTileService] makes it, its cover read. */
     private suspend fun lookNow(): TileLook {
-        val content = TileContent.of(app.playing.state(), app.library.songsForTile(), app.tileCoverSizePx(), Instant.now())
+        val content = TileContent.of(
+            app.playing.state(),
+            app.library.songsForTile(),
+            app.favorites.load(),
+            app.tileCoverSizePx(),
+            Instant.now(),
+        )
         return TileLook.of(versioned(content), app.themeChoice.load().id)
     }
 

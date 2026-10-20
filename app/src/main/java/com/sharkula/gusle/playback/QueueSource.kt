@@ -3,6 +3,7 @@ package com.sharkula.gusle.playback
 import android.content.res.Resources
 import android.os.Bundle
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import com.sharkula.gusle.R
 import com.sharkula.gusle.data.Songs
@@ -22,6 +23,9 @@ sealed interface QueueSource {
     /** An album's songs, by [com.sharkula.gusle.data.Album.key]; null for the songs without an album. */
     data class Album(val key: String?) : QueueSource
 
+    /** The favorite songs. */
+    data object Favorites : QueueSource
+
     /** As it's saved and sent; null for [AllSongs]. */
     val encoded: String?
         get() = when (this) {
@@ -29,6 +33,7 @@ sealed interface QueueSource {
             // No artist's or album's key is empty, so the songs without one can have that.
             is Artist -> ArtistPrefix + key.orEmpty()
             is Album -> AlbumPrefix + key.orEmpty()
+            Favorites -> FavoritesName
         }
 
     companion object {
@@ -37,6 +42,7 @@ sealed interface QueueSource {
             encoded == null -> AllSongs
             encoded.startsWith(ArtistPrefix) -> Artist(encoded.removePrefix(ArtistPrefix).ifEmpty { null })
             encoded.startsWith(AlbumPrefix) -> Album(encoded.removePrefix(AlbumPrefix).ifEmpty { null })
+            encoded == FavoritesName -> Favorites
             else -> AllSongs
         }
 
@@ -48,6 +54,7 @@ sealed interface QueueSource {
 
 private const val ArtistPrefix = "artist:"
 private const val AlbumPrefix = "album:"
+private const val FavoritesName = "favorites"
 private const val SourceKey = "com.sharkula.gusle.QUEUE_SOURCE"
 
 /**
@@ -70,12 +77,26 @@ fun List<MediaItem>.comingFrom(source: QueueSource): List<MediaItem> {
 val Player.queueName: String? get() = playlistMetadata.title?.toString()
 
 /**
+ * Where the player's queue came from, as [SessionPlayer.nameQueue] notes it with the name; All songs
+ * while it has no songs, and from a player let go of.
+ */
+val Player.queueSource: QueueSource get() = QueueSource.decode(playlistMetadata.extras?.getString(SourceKey))
+
+/** The name the player's queue goes by, and where its songs came from, as the player keeps them. */
+internal fun queueMetadata(name: String, source: QueueSource): MediaMetadata =
+    MediaMetadata.Builder()
+        .setTitle(name)
+        .setExtras(Bundle().apply { putString(SourceKey, source.encoded) })
+        .build()
+
+/**
  * What the Queue and the watch's media controls call this source: "All songs", the artist's or the
  * album's name as the [songs] spell it now, or "Unknown artist" or "Unknown album". An artist or
  * album no longer among them, e.g. after their songs were tagged anew, goes by the name in its key.
  */
 fun QueueSource.name(songs: Songs.Loaded?, resources: Resources): String = when (this) {
     QueueSource.AllSongs -> resources.getString(R.string.all_songs)
+    QueueSource.Favorites -> resources.getString(R.string.favorites)
     is QueueSource.Artist -> when (key) {
         null -> resources.getString(R.string.unknown_artist)
         else -> songs?.artistsByKey?.get(key)?.name ?: key

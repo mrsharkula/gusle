@@ -24,8 +24,8 @@ import kotlin.random.Random
  *
  * Turning shuffle on keeps the song it's on first, and the rest follow in a new random order.
  *
- * It knows where its songs came from ([queueSource]), which reaches it with them, and calls their
- * queue that ([nameOf]) in its playlist title, for the Queue and the watch's media controls.
+ * It knows where its songs came from ([queueSource]), which reaches it with them, and names their
+ * queue after it in its playlist metadata ([describe]), for the Queue and the watch's media controls.
  *
  * Every command reaches the player through here, so it knows when Previous went to a song. Its own
  * skips go to [player] directly and keep that direction.
@@ -34,7 +34,7 @@ import kotlin.random.Random
 class SessionPlayer(
     private val player: ExoPlayer,
     private val unplayable: UnplayableSongs,
-    private val nameOf: (QueueSource) -> String,
+    private val describe: (QueueSource) -> MediaMetadata,
     private val random: Random = Random,
 ) : ForwardingPlayer(player) {
     /** Whether Previous went to the song it's on, until that song plays or another command moves on. */
@@ -122,15 +122,22 @@ class SessionPlayer(
     }
 
     /**
-     * Gives its queue the name of where its songs came from, or none while it has no songs. Call it
-     * again when the name may have changed, e.g. once the songs are read anew.
+     * Gives its queue the name of where its songs came from, noting where that is too ([queueSource]),
+     * or none while it has no songs. Call it again when the name may have changed, e.g. once the
+     * songs are read anew.
      */
     fun nameQueue() {
-        player.playlistMetadata = if (player.mediaItemCount == 0) {
-            MediaMetadata.EMPTY
-        } else {
-            MediaMetadata.Builder().setTitle(nameOf(queueSource)).build()
+        val metadata = if (player.mediaItemCount == 0) MediaMetadata.EMPTY else describe(queueSource)
+        // MediaMetadata's equals leaves out the extras, where the source is noted, and the player
+        // keeps metadata equal to what it has: here, under the same name (its only other part). So
+        // songs from elsewhere under the same name, e.g. the favorites after an artist called
+        // Favorites, would keep the old source: emptied first, it takes the new one. (The player's
+        // source, read from its metadata, not this one's.)
+        val sameName = metadata.title?.toString() == player.playlistMetadata.title?.toString()
+        if (sameName && player.queueSource != queueSource) {
+            player.playlistMetadata = MediaMetadata.EMPTY
         }
+        player.playlistMetadata = metadata
     }
 
     override fun setShuffleModeEnabled(shuffleModeEnabled: Boolean) {

@@ -1,6 +1,7 @@
 package com.sharkula.gusle.ui
 
 import androidx.activity.compose.LocalActivity
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -11,9 +12,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSerializable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import androidx.navigation3.runtime.NavBackStack
@@ -21,7 +25,9 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.serialization.NavBackStackSerializer
 import androidx.navigation3.ui.NavDisplay
+import androidx.wear.compose.material3.Icon
 import com.sharkula.gusle.R
+import com.sharkula.gusle.data.FavoriteSongs
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.playback.QueueSource
@@ -29,8 +35,11 @@ import com.sharkula.gusle.playingSong
 import com.sharkula.gusle.themeChoice
 import com.sharkula.gusle.ui.albums.AlbumsScreen
 import com.sharkula.gusle.ui.artists.ArtistsScreen
+import com.sharkula.gusle.ui.components.MessageScreen
 import com.sharkula.gusle.ui.covers.SongCover
 import com.sharkula.gusle.ui.covers.playingSongColors
+import com.sharkula.gusle.ui.favorites.rememberFavorites
+import com.sharkula.gusle.ui.favorites.rememberSetFavorite
 import com.sharkula.gusle.ui.home.HomeScreen
 import com.sharkula.gusle.ui.nowplaying.NowPlayingScreen
 import com.sharkula.gusle.ui.nowplaying.SeekScreen
@@ -74,6 +83,10 @@ sealed interface Screen : NavKey {
      */
     @Serializable
     data class Album(val key: String?) : Screen
+
+    /** The favorite songs. */
+    @Serializable
+    data object Favorites : Screen
 
     @Serializable
     data object NowPlaying : Screen
@@ -192,19 +205,30 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
 
     /**
      * The songs in [list] under their [title], played from the tapped one, or shuffled, as songs
-     * from [source]. The player's song opens Now playing.
+     * from [source]. The player's song opens Now playing. The favorites among them have their
+     * hearts, but not in the favorites themselves.
      */
     @Composable
-    fun SongList(title: String, source: QueueSource, list: List<Song>, playing: Song?, isPlaying: Boolean) {
+    fun SongList(
+        title: String,
+        source: QueueSource,
+        list: List<Song>,
+        playing: Song?,
+        isPlaying: Boolean,
+        favorites: FavoriteSongs = rememberFavorites(),
+    ) {
         SongListScreen(
             title,
             list,
             playing = playing,
             isPlaying = isPlaying,
+            favorites = favorites,
             onShuffleAll = { play { shuffleAll(list, source) } },
             onSong = { index -> play { playFrom(list, index, source) } },
             // Rather than starting it again: on a watch, taps happen by accident.
             onPlayingSong = { go(Screen.NowPlaying) },
+            onFavorite = rememberSetFavorite(),
+            heartsShown = source != QueueSource.Favorites,
         )
     }
 
@@ -238,19 +262,23 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
         entryProvider = entryProvider {
             entry<Screen.Home> {
                 PlayingSongTheme(songs) { playing, isPlaying ->
+                    val favorites = rememberFavorites()
                     HomeScreen(
                         songCount = songs.list.size,
                         // The songs without an artist aren't an artist's.
                         artistCount = songs.artists.count { it.name != null },
                         // Nor the songs without an album an album.
                         albumCount = songs.albums.count { it.name != null },
+                        favoriteCount = remember(favorites, songs) { favorites.countIn(songs.byId) },
                         playing = playing,
                         isPlaying = isPlaying,
+                        playingIsFavorite = playing != null && playing in favorites,
                         // It goes on as it is.
                         onPlaying = { go(Screen.NowPlaying) },
                         onAllSongs = { go(Screen.AllSongs) },
                         onArtists = { go(Screen.Artists) },
                         onAlbums = { go(Screen.Albums) },
+                        onFavorites = { go(Screen.Favorites) },
                         onSettings = { go(Screen.Settings) },
                     )
                 }
@@ -301,6 +329,37 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                     source = QueueSource.Album(screen.key),
                     songsOf = { it.songs },
                 )
+            }
+            entry<Screen.Favorites>(metadata = slidesIn(Screen.Favorites)) {
+                PlayingSongTheme(songs) { playing, isPlaying ->
+                    val favorites = rememberFavorites()
+                    val list = remember(favorites, songs) { favorites.newestFirst(songs.byId) }
+                    if (list.isEmpty()) {
+                        MessageScreen(
+                            icon = R.drawable.ic_favorite,
+                            title = stringResource(R.string.no_favorites_title),
+                            text = stringResource(R.string.no_favorites_text),
+                            action = stringResource(R.string.all_songs),
+                            onAction = { go(Screen.AllSongs) },
+                            actionIcon = {
+                                Icon(
+                                    painterResource(R.drawable.ic_music_note),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            },
+                        )
+                    } else {
+                        SongList(
+                            title = stringResource(R.string.favorites),
+                            source = QueueSource.Favorites,
+                            list = list,
+                            playing = playing,
+                            isPlaying = isPlaying,
+                            favorites = favorites,
+                        )
+                    }
+                }
             }
             entry<Screen.NowPlaying>(metadata = slidesIn(Screen.NowPlaying)) {
                 NowPlayingScreen(player, songs.byId, onQueue = { go(Screen.Queue) }, onSeek = { go(Screen.Seek) })
