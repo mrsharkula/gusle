@@ -7,7 +7,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -111,6 +111,7 @@ import com.sharkula.gusle.playback.UnplayableSongs
 import com.sharkula.gusle.playback.songId
 import com.sharkula.gusle.ui.LocalHiddenDepth
 import com.sharkula.gusle.ui.components.formatLength
+import com.sharkula.gusle.ui.components.onLongPress
 import com.sharkula.gusle.ui.components.rememberLengthInWords
 import com.sharkula.gusle.ui.components.rememberMayAnimate
 import com.sharkula.gusle.ui.components.rememberScreenShown
@@ -137,7 +138,8 @@ import kotlinx.coroutines.launch
  * The player: the playing song's cover in the middle, fading into black, its title, the controls
  * and its artist, and its progress along the edge. It follows the player wherever it's controlled
  * from, e.g. the watch's media controls. Swiping left opens the queue ([onQueue]); tapping the time
- * under the title opens the seek screen ([onSeek]).
+ * under the title opens the seek screen ([onSeek]); holding the title, or the time, opens the song's
+ * actions ([onSongActions]).
  */
 @Composable
 fun NowPlayingScreen(
@@ -145,13 +147,14 @@ fun NowPlayingScreen(
     songsById: Map<Long, Song>,
     onQueue: () -> Unit,
     onSeek: () -> Unit,
+    onSongActions: (Song) -> Unit,
 ) {
     val player = connection.rememberShownPlayer()
 
     ScreenScaffold {
         // Just the clock until the player first connects, which takes milliseconds.
         if (player != null) {
-            NowPlaying(connection, player, songsById, onQueue, onSeek)
+            NowPlaying(connection, player, songsById, onQueue, onSeek, onSongActions)
         }
     }
 }
@@ -164,6 +167,7 @@ private fun NowPlaying(
     songsById: Map<Long, Song>,
     onQueue: () -> Unit,
     onSeek: () -> Unit,
+    onSongActions: (Song) -> Unit,
 ) {
     val item = rememberCurrentMediaItemState(player)
     val playPause = rememberPlayPauseButtonState(player)
@@ -224,6 +228,8 @@ private fun NowPlaying(
         onNext = onNext,
         onQueue = onQueue,
         onSeek = onSeek,
+        // Likewise none for a song deleted while it plays.
+        onSongActions = remember(song, onSongActions) { song?.let { { onSongActions(it) } } },
     )
 }
 
@@ -290,6 +296,8 @@ private fun NowPlaying(
     onQueue: () -> Unit,
     /** A tap on the time under the title. */
     onSeek: () -> Unit,
+    /** Holding the title, or the time under it; null while there's no song, when holding does nothing. */
+    onSongActions: (() -> Unit)?,
 ) {
     val haptics = LocalHapticFeedback.current
     val crownStepPx = with(LocalDensity.current) { CrownStep.toPx() }
@@ -319,10 +327,11 @@ private fun NowPlaying(
                     title,
                     animate,
                     onQueue,
+                    onSongActions,
                     Modifier.align(Alignment.TopCenter).padding(start = 40.dp, top = 36.dp, end = 40.dp),
                 )
                 // Before the controls, so where its tap target reaches over them, they take the tap.
-                UnderTitle(elapsedMs, cantPlay, onSeek)
+                UnderTitle(elapsedMs, cantPlay, onSeek, onSongActions)
                 Controls(
                     isPlaying,
                     animate,
@@ -375,17 +384,27 @@ private fun NowPlaying(
  * The song's title, centered. One too long for the screen scrolls slowly instead of ending in "…",
  * while [animate] and on the screen: kept below another screen, e.g. the seek screen, it would
  * scroll unseen, and wake Gusle for every frame. It also offers screen readers the Queue
- * ([onQueue]), as they take swipes for themselves.
+ * ([onQueue]), as they take swipes for themselves. Holding it, anywhere along its line, opens the
+ * song's actions ([onSongActions]).
  */
 @Composable
-private fun Title(title: String, animate: Boolean, onQueue: () -> Unit, modifier: Modifier) {
+private fun Title(
+    title: String,
+    animate: Boolean,
+    onQueue: () -> Unit,
+    onSongActions: (() -> Unit)?,
+    modifier: Modifier,
+) {
     val queueLabel = stringResource(R.string.queue)
+    val actionsLabel = stringResource(R.string.open_song_options)
+    val haptics = LocalHapticFeedback.current
     var visible by remember { mutableStateOf(false) }
     Text(
         title,
         modifier = modifier
             .onVisibilityChanged(minFractionVisible = 0f) { visible = it }
             .fillMaxWidth()
+            .then(if (onSongActions != null) Modifier.onLongPress(actionsLabel, haptics, onSongActions) else Modifier)
             // A title that fits stays centered.
             .wrapContentWidth()
             .then(if (animate && visible) Modifier.slowMarquee() else Modifier)
@@ -410,6 +429,7 @@ private fun BoxScope.UnderTitle(
     elapsedMs: (() -> Long)?,
     cantPlay: () -> UnplayableSongs.Failure?,
     onSeek: () -> Unit,
+    onSongActions: (() -> Unit)?,
 ) {
     val failure = cantPlay()
     if (failure != null) {
@@ -424,16 +444,32 @@ private fun BoxScope.UnderTitle(
         // Not while kept below another screen, where it would only compose again every second,
         // unseen: it's back, with the time as it is, in the frame it comes into view. The text is
         // 60 dp down, as in the design, in the middle of its tap target.
-        ElapsedTime(elapsedMs, onSeek, Modifier.align(Alignment.TopCenter).padding(top = 45.dp))
+        // Looked up here rather than at each tick of the time.
+        val actionsLabel = stringResource(R.string.open_song_options)
+        ElapsedTime(
+            elapsedMs,
+            onSeek,
+            onSongActions,
+            actionsLabel,
+            Modifier.align(Alignment.TopCenter).padding(top = 45.dp),
+        )
     }
 }
 
 /**
  * How far the song is, e.g. 1:23, read from [positionMs] only here: a button that opens the seek
- * screen ([onSeek]). The text is small, so the button reaches well around it.
+ * screen ([onSeek]). The text is small, so the button reaches well around it, over the lower half
+ * of the title, which is why holding it opens the song's actions as holding the title does
+ * ([onSongActions]); screen readers name that [actionsLabel].
  */
 @Composable
-private fun ElapsedTime(positionMs: () -> Long, onSeek: () -> Unit, modifier: Modifier) {
+private fun ElapsedTime(
+    positionMs: () -> Long,
+    onSeek: () -> Unit,
+    onSongActions: (() -> Unit)?,
+    actionsLabel: String,
+    modifier: Modifier,
+) {
     val position = positionMs()
     val resources = LocalResources.current
     val inWords = rememberLengthInWords()
@@ -442,7 +478,13 @@ private fun ElapsedTime(positionMs: () -> Long, onSeek: () -> Unit, modifier: Mo
             .height(ElapsedTapHeight)
             .widthIn(min = ElapsedTapWidth)
             .clip(CircleShape)
-            .clickable(role = Role.Button, onClick = onSeek)
+            // With the long-press haptic, as a list row's.
+            .combinedClickable(
+                role = Role.Button,
+                onLongClickLabel = actionsLabel,
+                onLongClick = onSongActions,
+                onClick = onSeek,
+            )
             // Said in words, as "1:23" could be read as a time of day; worked out only when asked.
             .clearAndSetSemantics { contentDescription = resources.getString(R.string.elapsed_seek, inWords(position)) }
             .padding(horizontal = 16.dp),
@@ -493,7 +535,8 @@ private val SwipeSpeed = 400.dp // per second
 /**
  * Calls [onSwipe] when a finger swipes left: far enough, or quickly. Once a drag goes left, it's
  * taken from the controls under it, so they don't take it for a tap. Drags that go right, up or
- * down are left alone, for going back and for the controls.
+ * down are left alone, for going back and for the controls, and so is a touch something under it
+ * took first, e.g. a long press that opened the song's actions.
  */
 private fun Modifier.onSwipeLeft(onSwipe: () -> Unit): Modifier = pointerInput(onSwipe) {
     awaitEachGesture {
@@ -507,7 +550,7 @@ private fun Modifier.onSwipeLeft(onSwipe: () -> Unit): Modifier = pointerInput(o
             velocity.addPointerInputChange(change)
             val moved = change.position - down.position
             if (!swiping) {
-                if (!change.pressed) return@awaitEachGesture
+                if (!change.pressed || change.isConsumed) return@awaitEachGesture
                 if (moved.getDistance() < viewConfiguration.touchSlop) continue
                 // Mostly to the left, or it's not a swipe for the queue.
                 if (moved.x > 0 || abs(moved.y) > abs(moved.x)) return@awaitEachGesture
@@ -823,6 +866,7 @@ private fun NowPlayingPreview(
                     onNext = {},
                     onQueue = {},
                     onSeek = {},
+                    onSongActions = {},
                 )
             }
         }

@@ -10,14 +10,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -37,6 +41,7 @@ import com.sharkula.gusle.data.FavoriteSongs
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.favorites
 import com.sharkula.gusle.ui.heldWhileHidden
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
@@ -76,9 +81,9 @@ private val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
  * A heart that says whether a song is a favorite ([isFavorite]): outlined in [outlineColor] when it
  * isn't, filled in the primary color when it is, [iconSize] across, with a touch target of the
  * smallest size around it. A tap calls [onToggle] with what it's to be, with a haptic tick; adding
- * fills it from the middle while it grows and shrinks back, removing dips it. With Reduce motion, or
- * when the state changes elsewhere (e.g. the next song, or the tile), it just switches. Null
- * [onToggle] disables it, e.g. with no song.
+ * fills it from the middle while it grows and shrinks back, removing dips it ([HeartTap]). With
+ * Reduce motion, or when the state changes elsewhere (e.g. the next song, or the tile), it just
+ * switches. Null [onToggle] disables it, e.g. with no song.
  */
 @Composable
 fun FavoriteHeart(
@@ -88,52 +93,88 @@ fun FavoriteHeart(
     iconSize: Dp,
     modifier: Modifier = Modifier,
 ) {
-    val haptics = LocalHapticFeedback.current
-    // Only Wear's own: Android's Remove animations makes them jump by itself.
-    val reduceMotion = LocalReduceMotion.current
-    val scope = rememberCoroutineScope()
-    // How filled it is: as it should be, unless a tap's animation is on its way there.
-    val filled = if (isFavorite) 1f else 0f
-    val fill = remember { Animatable(filled) }
-    val scale = remember { Animatable(1f) }
+    val tap = rememberHeartTap()
     val label = stringResource(if (isFavorite) R.string.remove_from_favorites else R.string.add_to_favorites)
-    val primary = MaterialTheme.colorScheme.primary
     Box(
         modifier
             .size(HeartTouchTarget)
             .clip(CircleShape)
             .semantics { contentDescription = label }
             .clickable(enabled = onToggle != null, role = Role.Button) {
-                val adding = !isFavorite
-                haptics.performHapticFeedback(if (adding) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
-                onToggle?.invoke(adding)
-                if (!reduceMotion) {
-                    // Under way before the next frame, which shows the new state.
-                    scope.launch(start = CoroutineStart.UNDISPATCHED) { fill.animateFill(adding) }
-                    scope.launch(start = CoroutineStart.UNDISPATCHED) { scale.animateScale(adding) }
-                }
+                onToggle?.let { tap.tap(adding = !isFavorite, it) }
             },
         contentAlignment = Alignment.Center,
     ) {
-        // Scaled while drawing, so the animation composes nothing again.
-        Box(Modifier.size(iconSize).graphicsLayer { scaleX = scale.value; scaleY = scale.value }) {
-            Icon(
-                painterResource(R.drawable.ic_favorite_outline),
-                contentDescription = null,
-                modifier = Modifier.matchParentSize(),
-                tint = if (isFavorite) primary else outlineColor,
-            )
-            Icon(
-                painterResource(R.drawable.ic_favorite),
-                contentDescription = null,
-                modifier = Modifier.matchParentSize().graphicsLayer {
-                    val shown = if (fill.isRunning) fill.value else filled
-                    scaleX = shown
-                    scaleY = shown
-                },
-                tint = primary,
-            )
+        HeartIcon(isFavorite, tap, outlineColor, Modifier.size(iconSize))
+    }
+}
+
+/**
+ * What a tap on a favorite heart does, for [FavoriteHeart] and for a button that carries the heart:
+ * a haptic tick, the change itself, and the heart's fill and size as they move, which [HeartIcon]
+ * draws; with Wear's Reduce motion ([reduceMotion]), it just switches.
+ */
+@Stable
+class HeartTap internal constructor(
+    private val scope: CoroutineScope,
+    private val haptics: HapticFeedback,
+    private val reduceMotion: State<Boolean>,
+) {
+    // How filled the heart is while a tap's fill is on its way; otherwise it's as the state says.
+    internal val fill = Animatable(0f)
+    internal val scale = Animatable(1f)
+
+    /**
+     * Ticks, and gives [onToggle] what it's to be: a favorite if [adding]. Unless [reduceMotion],
+     * the heart then fills from the middle while it grows and shrinks back, or dips as it empties.
+     */
+    fun tap(adding: Boolean, onToggle: (favorite: Boolean) -> Unit) {
+        haptics.performHapticFeedback(if (adding) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
+        onToggle(adding)
+        if (!reduceMotion.value) {
+            // Under way before the next frame, which shows the new state.
+            scope.launch(start = CoroutineStart.UNDISPATCHED) { fill.animateFill(adding) }
+            scope.launch(start = CoroutineStart.UNDISPATCHED) { scale.animateScale(adding) }
         }
+    }
+}
+
+/** A heart's [HeartTap], kept while the heart is shown. */
+@Composable
+fun rememberHeartTap(): HeartTap {
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    // Only Wear's own: Android's Remove animations makes them jump by itself.
+    val reduceMotion = rememberUpdatedState(LocalReduceMotion.current)
+    return remember(scope, haptics, reduceMotion) { HeartTap(scope, haptics, reduceMotion) }
+}
+
+/**
+ * The heart itself, the size of [modifier]: outlined in [outlineColor] when the song isn't a
+ * favorite ([isFavorite]), filled in the primary color when it is, and moving as a [tap] moves it.
+ */
+@Composable
+fun HeartIcon(isFavorite: Boolean, tap: HeartTap, outlineColor: Color, modifier: Modifier) {
+    val primary = MaterialTheme.colorScheme.primary
+    val filled = if (isFavorite) 1f else 0f
+    // Scaled while drawing, so the animation composes nothing again.
+    Box(modifier.graphicsLayer { scaleX = tap.scale.value; scaleY = tap.scale.value }) {
+        Icon(
+            painterResource(R.drawable.ic_favorite_outline),
+            contentDescription = null,
+            modifier = Modifier.matchParentSize(),
+            tint = if (isFavorite) primary else outlineColor,
+        )
+        Icon(
+            painterResource(R.drawable.ic_favorite),
+            contentDescription = null,
+            modifier = Modifier.matchParentSize().graphicsLayer {
+                val shown = if (tap.fill.isRunning) tap.fill.value else filled
+                scaleX = shown
+                scaleY = shown
+            },
+            tint = primary,
+        )
     }
 }
 

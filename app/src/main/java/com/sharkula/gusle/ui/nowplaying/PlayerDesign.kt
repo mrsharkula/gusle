@@ -59,6 +59,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.applyCanvas
 import androidx.core.graphics.createBitmap
+import androidx.wear.compose.material3.ButtonColors
+import androidx.wear.compose.material3.ButtonDefaults
+import androidx.wear.compose.material3.ColorScheme
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.IconButtonColors
 import androidx.wear.compose.material3.IconButtonDefaults
@@ -67,6 +70,7 @@ import com.sharkula.gusle.R
 import com.sharkula.gusle.coverColors
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.ui.covers.CoverArt
+import com.sharkula.gusle.ui.covers.CoverColors
 import com.sharkula.gusle.ui.covers.NoCoverPainter
 import com.sharkula.gusle.ui.covers.SongCover
 import com.sharkula.gusle.ui.theme.LocalAppTheme
@@ -171,7 +175,27 @@ private fun coverSizePx(): Int = coverSizePx(LocalWindowInfo.current.containerSi
  * are ready.
  */
 @Composable
-fun rememberCoverArt(song: Song?): CoverArt? {
+fun rememberCoverArt(song: Song?): CoverArt? = rememberArt(song, CoverColors::art)
+
+/**
+ * The [song]'s cover alone, for a screen in other colors than the song's own, e.g. the playing
+ * song's: its colors aren't worked out ([CoverColors.pictureOnly]). Like [rememberCoverArt], in the
+ * first frame when it's the one loaded last, e.g. by Now playing on the same song; otherwise once
+ * it's read: at once from Coil's memory when a screen or the tile showed it lately, or within a
+ * second on the watch. Null until then.
+ */
+@Composable
+fun rememberCoverPicture(song: Song): CoverArt? = rememberArt(song, CoverColors::pictureOnly)
+
+/**
+ * The [song]'s cover as [read] reads it, at the cover's size: the art loaded last when it's the same
+ * song's, at once, otherwise once it's read. Null until then.
+ */
+@Composable
+private fun rememberArt(
+    song: Song?,
+    read: suspend CoverColors.(cover: SongCover?, sizePx: Int) -> CoverArt,
+): CoverArt? {
     val cover = song?.let(::SongCover)
     val coverColors = LocalContext.current.coverColors
     val coverSizePx = coverSizePx()
@@ -180,18 +204,24 @@ fun rememberCoverArt(song: Song?): CoverArt? {
         coverColors.lastArt?.takeIf { it.cover == cover && (it.picture != null || cover == null) }
     }
     val art by produceState(loaded, cover, coverSizePx) {
-        value = loaded ?: coverColors.art(cover, coverSizePx)
+        value = loaded ?: coverColors.read(cover, coverSizePx)
     }
     return loaded ?: art
 }
 
 /**
  * The [picture] in a circle in the middle, or the no-cover note when there's none, fading into
- * black toward the edge, at [alpha] opacity. Center-cropped, so a 16:9 cover shows its middle.
+ * black toward the edge, at [alpha] opacity. Center-cropped, so a 16:9 cover shows its middle. The
+ * note glows in [noCoverColors]: the app theme's, which are a song without a cover's own.
  */
 @Composable
-fun Cover(picture: ImageBitmap?, alpha: Float, modifier: Modifier) {
-    val painter = if (picture != null) remember(picture) { BitmapPainter(picture) } else rememberNoCoverPainter()
+fun Cover(
+    picture: ImageBitmap?,
+    alpha: Float,
+    modifier: Modifier,
+    noCoverColors: ColorScheme = LocalAppTheme.current.colors,
+) {
+    val painter = if (picture != null) remember(picture) { BitmapPainter(picture) } else rememberNoCoverPainter(noCoverColors)
     Image(
         painter,
         contentDescription = null,
@@ -223,13 +253,12 @@ private fun Modifier.fadeIntoBlack(alpha: Float) =
 private const val NoCoverGlowEdgeBrightness = 0.58f
 
 /**
- * A glow with a large faint music note, always in the app theme's colors: those are a song without
- * a cover's, also while the last song's colors are still up.
+ * A glow with a large faint music note, in [colors]: on Now playing the app theme's, which are a song
+ * without a cover's, also while the last song's colors are still up.
  */
 @Composable
-private fun rememberNoCoverPainter(): Painter {
+private fun rememberNoCoverPainter(colors: ColorScheme): Painter {
     val note = painterResource(R.drawable.ic_music_note)
-    val colors = LocalAppTheme.current.colors
     return remember(note, colors) {
         val middle = colors.primaryContainer
         val edge = Color(
@@ -254,15 +283,32 @@ val RingWidth = 4.dp
 /** The ring's faint track, under the part played. */
 val RingTrack = Color.White.copy(alpha = 0.16f)
 
+/** How much of the primary color tints a see-through button over the cover. */
+private const val SeeThroughTint = 0.28f
+
 /**
  * A see-through button's colors, like Play's: the cover shows through a tint of the primary color,
  * under a white icon.
  */
 @Composable
 fun seeThroughButtonColors(): IconButtonColors = IconButtonDefaults.filledIconButtonColors(
-    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = SeeThroughTint),
     contentColor = Color.White,
 )
+
+/** The same for a button with a label, e.g. a song's actions: the label and its icon white. */
+@Composable
+fun seeThroughLabelButtonColors(): ButtonColors = ButtonDefaults.buttonColors(
+    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = SeeThroughTint),
+    contentColor = Color.White,
+    iconColor = Color.White,
+)
+
+/**
+ * Behind numbers or buttons, the cover is dimmed more than on Now playing: on the seek screen, and
+ * behind a song's actions.
+ */
+const val DimmedCoverAlpha = 0.45f
 
 /** The shadow of the icons on see-through buttons. */
 val SeeThroughIconShadow = Shadow(radius = 3.dp, offset = DpOffset(0.dp, 1.dp), alpha = 0.65f)

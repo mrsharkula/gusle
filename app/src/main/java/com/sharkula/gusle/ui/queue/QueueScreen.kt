@@ -77,6 +77,7 @@ import com.sharkula.gusle.ui.playback.PlayerConnection
 import com.sharkula.gusle.ui.playback.rememberShownPlayer
 import com.sharkula.gusle.ui.songs.SongRow
 import com.sharkula.gusle.ui.songs.length
+import com.sharkula.gusle.ui.songs.songActionsLabel
 import com.sharkula.gusle.ui.theme.GusleTheme
 import com.sharkula.gusle.unplayableSongs
 
@@ -104,11 +105,17 @@ private val Dimmed = Modifier.graphicsLayer {
  * songs played before it above, dimmed, and it follows the player wherever it's controlled from.
  * Tapping a song plays it, in the same order; tapping the player's song goes back to Now playing
  * ([onPlayingSong]). Swiping a song left adds it to the favorites, or removes it; their hearts show
- * unless the songs came from the favorites and still all are.
+ * unless the songs came from the favorites and still all are. Holding a song opens its actions, as
+ * the player's item it is ([onSongActions]).
  */
 @OptIn(UnstableApi::class) // rememberPlayPauseButtonState, rememberShuffleButtonState
 @Composable
-fun QueueScreen(connection: PlayerConnection, songsById: Map<Long, Song>, onPlayingSong: () -> Unit) {
+fun QueueScreen(
+    connection: PlayerConnection,
+    songsById: Map<Long, Song>,
+    onPlayingSong: () -> Unit,
+    onSongActions: (song: Song, window: Int) -> Unit,
+) {
     val player = connection.rememberShownPlayer()
     // Just the clock until the player first connects, which takes milliseconds.
     if (player == null) {
@@ -148,6 +155,7 @@ fun QueueScreen(connection: PlayerConnection, songsById: Map<Long, Song>, onPlay
         },
         onPlayingSong = onPlayingSong,
         onFavorite = rememberSetFavorite(),
+        onSongActions = onSongActions,
     )
 }
 
@@ -236,6 +244,8 @@ private fun Queue(
     onSong: (window: Int) -> Unit,
     onPlayingSong: () -> Unit,
     onFavorite: (song: Song, favorite: Boolean) -> Unit,
+    /** Gets the song held, and the player's item it is. */
+    onSongActions: (song: Song, window: Int) -> Unit,
 ) {
     val currentPlace = queue.placeOf(current)
     // The player's song in the middle from the first frame, with the songs played before it above.
@@ -255,6 +265,7 @@ private fun Queue(
     }
     val noCover = rememberRowNoCoverPainter()
     val cantPlay = stringResource(R.string.cant_play)
+    val actionsLabel = songActionsLabel()
     val swipeRows = rememberSwipeRows(listState)
 
     ListScreen(title = name ?: stringResource(R.string.all_songs), listState = listState) { transformationSpec ->
@@ -289,6 +300,8 @@ private fun Queue(
                     transformationSpec = transformationSpec,
                     // Rather than starting it again: on a watch, taps happen by accident.
                     onClick = if (isPlayingHere != null) onPlayingSong else ({ onSong(entry.window) }),
+                    onActions = { onSongActions(song, entry.window) },
+                    actionsLabel = actionsLabel,
                     modifier = actions.then(if (entry.place < currentPlace || !canPlay) Dimmed else Modifier),
                     minHeight = RowHeight,
                     isFavorite = heartsShown && isFavorite,
@@ -382,6 +395,7 @@ private fun QueueShuffleOffPreview() {
             onSong = {},
             onPlayingSong = {},
             onFavorite = { _, _ -> },
+            onSongActions = { _, _ -> },
         )
     }
 }
@@ -404,6 +418,7 @@ private fun QueueShuffleOnPreview() {
             onSong = {},
             onPlayingSong = {},
             onFavorite = { _, _ -> },
+            onSongActions = { _, _ -> },
         )
     }
 }

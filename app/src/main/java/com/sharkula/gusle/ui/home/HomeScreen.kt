@@ -21,6 +21,7 @@ import com.sharkula.gusle.ui.components.ListButton
 import com.sharkula.gusle.ui.components.ListScreen
 import com.sharkula.gusle.ui.covers.rememberRowNoCoverPainter
 import com.sharkula.gusle.ui.songs.SongRow
+import com.sharkula.gusle.ui.songs.songActionsLabel
 import com.sharkula.gusle.ui.theme.GusleTheme
 import com.sharkula.gusle.ui.theme.seedColorScheme
 
@@ -37,6 +38,8 @@ fun HomeScreen(
     playingIsFavorite: Boolean,
     /** The song on top was tapped. */
     onPlaying: () -> Unit,
+    /** The song on top was held. */
+    onPlayingActions: () -> Unit,
     onAllSongs: () -> Unit,
     onArtists: () -> Unit,
     onAlbums: () -> Unit,
@@ -65,6 +68,8 @@ fun HomeScreen(
                     noCover = rememberRowNoCoverPainter(),
                     transformationSpec = transformationSpec,
                     onClick = onPlaying,
+                    onActions = onPlayingActions,
+                    actionsLabel = songActionsLabel(),
                     isFavorite = playingIsFavorite,
                 )
             }
@@ -158,6 +163,7 @@ private fun HomeScreenPreview() {
             isPlaying = false,
             playingIsFavorite = false,
             onPlaying = {},
+            onPlayingActions = {},
             onAllSongs = {},
             onArtists = {},
             onAlbums = {},
@@ -183,6 +189,7 @@ private fun HomeScreenPlayingPreview() {
             isPlaying = true,
             playingIsFavorite = true,
             onPlaying = {},
+            onPlayingActions = {},
             onAllSongs = {},
             onArtists = {},
             onAlbums = {},
@@ -206,6 +213,7 @@ private fun HomeScreenPlayingCoverPreview() {
             isPlaying = true,
             playingIsFavorite = true,
             onPlaying = {},
+            onPlayingActions = {},
             onAllSongs = {},
             onArtists = {},
             onAlbums = {},

@@ -33,7 +33,9 @@ import com.sharkula.gusle.ui.covers.rememberRowNoCoverPainter
  * A [song]'s row in a list: its cover, its title, and the [secondaryLabel] under it, after a small
  * heart if it [isFavorite]. The player's song is highlighted, with its equalizer at the end;
  * [isPlaying] is null for every other song. [noCover] stands in for missing covers
- * ([rememberRowNoCoverPainter], made once per list).
+ * ([rememberRowNoCoverPainter], made once per list). Holding it opens the song's actions
+ * ([onActions]), which screen readers offer as [actionsLabel] ([songActionsLabel], looked up
+ * once per list).
  */
 @Composable
 fun TransformingLazyColumnItemScope.SongRow(
@@ -43,6 +45,8 @@ fun TransformingLazyColumnItemScope.SongRow(
     noCover: Painter,
     transformationSpec: TransformationSpec,
     onClick: () -> Unit,
+    onActions: () -> Unit,
+    actionsLabel: String,
     modifier: Modifier = Modifier,
     minHeight: Dp = ButtonDefaults.Height,
     isFavorite: Boolean = false,
@@ -58,8 +62,14 @@ fun TransformingLazyColumnItemScope.SongRow(
         modifier,
         minHeight,
         isFavorite,
+        onLongClick = onActions,
+        onLongClickLabel = actionsLabel,
     )
 }
+
+/** What holding a song's row does, as screen readers offer it: "Open song options". */
+@Composable
+fun songActionsLabel(): String = stringResource(R.string.open_song_options)
 
 /** A favorite song's heart on its row, before the line under the title. */
 private val FavoriteMarkSize = 10.dp
@@ -71,7 +81,8 @@ private val FavoriteMarkGap = 3.dp
  * "…" when they don't fit; a favorite song's ([isFavorite]) has a small heart before the latter.
  * While [isPlaying] isn't null, the row is highlighted, with the equalizer at the end: for the
  * player's song, and for what it's from. [noCover] stands in for missing covers
- * ([rememberRowNoCoverPainter], made once per list).
+ * ([rememberRowNoCoverPainter], made once per list). Holding it calls [onLongClick], which screen
+ * readers name [onLongClickLabel].
  */
 @Composable
 fun TransformingLazyColumnItemScope.CoverRow(
@@ -85,6 +96,8 @@ fun TransformingLazyColumnItemScope.CoverRow(
     modifier: Modifier = Modifier,
     minHeight: Dp = ButtonDefaults.Height,
     isFavorite: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+    onLongClickLabel: String? = null,
 ) {
     // Accessibility services say what the equalizer shows.
     val state = isPlaying?.let { stringResource(if (it) R.string.playing else R.string.paused) }
@@ -122,6 +135,8 @@ fun TransformingLazyColumnItemScope.CoverRow(
             null
         },
         minHeight = minHeight,
+        onLongClick = onLongClick,
+        onLongClickLabel = onLongClickLabel,
     )
 }
 

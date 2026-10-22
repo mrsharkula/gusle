@@ -35,7 +35,7 @@ import com.sharkula.gusle.ui.theme.GusleTheme
  * A list of songs under its [title], with Shuffle all on top: All songs, an artist's songs, or the
  * favorites. The player's song is marked, and with [heartsShown], the [favorites]. Tapping a song
  * plays it and then the rest of the list, in its order; swiping it left adds it to the favorites, or
- * removes it ([onFavorite]).
+ * removes it ([onFavorite]); holding it opens its actions ([onSongActions]).
  */
 @Composable
 fun SongListScreen(
@@ -51,10 +51,12 @@ fun SongListScreen(
     /** The player's song was tapped: it goes on as it is. */
     onPlayingSong: () -> Unit,
     onFavorite: (song: Song, favorite: Boolean) -> Unit,
+    onSongActions: (Song) -> Unit,
     /** False where every song is a favorite: in Favorites itself. */
     heartsShown: Boolean = true,
 ) {
     val noCover = rememberRowNoCoverPainter()
+    val actionsLabel = songActionsLabel()
     val listState = rememberTransformingLazyColumnState()
     val swipeRows = rememberSwipeRows(listState)
 
@@ -96,6 +98,8 @@ fun SongListScreen(
                     noCover = noCover,
                     transformationSpec = transformationSpec,
                     onClick = if (isPlayingHere != null) onPlayingSong else ({ onSong(index) }),
+                    onActions = { onSongActions(song) },
+                    actionsLabel = actionsLabel,
                     modifier = actions,
                     isFavorite = heartsShown && isFavorite,
                 )
@@ -123,6 +127,7 @@ private fun SongListScreenPreview() {
             onSong = {},
             onPlayingSong = {},
             onFavorite = { _, _ -> },
+            onSongActions = {},
         )
     }
 }

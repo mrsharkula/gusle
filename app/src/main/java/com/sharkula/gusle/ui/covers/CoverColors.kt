@@ -163,6 +163,20 @@ class CoverColors(private val context: Context) {
     }
 
     /**
+     * [cover], at least [sizePx] across, read and kept as [art] reads it, but without working out
+     * its colors, for a screen in other colors than the song's own: [CoverArt.colors] are there only
+     * when they're known already. Leaves [lastArt] to the screens in the song's colors.
+     */
+    suspend fun pictureOnly(cover: SongCover?, sizePx: Int): CoverArt {
+        if (cover == null) return CoverArt(null, null, null)
+        val picture = when (val result = read(cover, sizePx, Scale.FILL, keep = true)) {
+            is SuccessResult -> result.image.toBitmap().also(Bitmap::prepareToDraw)
+            is ErrorResult -> null
+        }
+        return CoverArt(cover, picture?.asImageBitmap(), known(cover)?.scheme)
+    }
+
+    /**
      * [cover], at least [sizePx] across, with its colors, for the tile, which bakes its own copy:
      * read once, and kept in Coil's memory like [art]'s, so at Now playing's size it's one read for
      * both. Unlike [art], it leaves [lastArt] to the screens, and doesn't put the picture on the GPU.

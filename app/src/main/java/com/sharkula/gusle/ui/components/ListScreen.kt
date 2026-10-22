@@ -69,7 +69,8 @@ private val TrailingGap = 10.dp
  * A full-width row in a [ListScreen] that narrows toward the round edges like every other row,
  * given the [transformationSpec] the list hands its content. [trailing] goes at the row's end,
  * centered on its height, e.g. the playing song's equalizer. It's [minHeight] tall, or taller when
- * a large font needs it.
+ * a large font needs it. Holding it calls [onLongClick], with the long-press haptic; screen readers
+ * name that action [onLongClickLabel].
  */
 @Composable
 fun TransformingLazyColumnItemScope.ListButton(
@@ -83,6 +84,8 @@ fun TransformingLazyColumnItemScope.ListButton(
     enabled: Boolean = true,
     colors: ButtonColors = ButtonDefaults.buttonColors(),
     minHeight: Dp = ButtonDefaults.Height,
+    onLongClick: (() -> Unit)? = null,
+    onLongClickLabel: String? = null,
 ) {
     // Button has no slot at the end. Its single-slot form takes the icon and labels laid out as
     // Button lays them out itself, with the same padding and type, and then [trailing]. Every row
@@ -91,6 +94,8 @@ fun TransformingLazyColumnItemScope.ListButton(
         onClick = onClick,
         // Inside the transformed height, so the row still shrinks toward the edges.
         modifier = modifier.fillMaxWidth().transformedHeight(this, transformationSpec).heightIn(min = minHeight),
+        onLongClick = onLongClick,
+        onLongClickLabel = onLongClickLabel,
         enabled = enabled,
         colors = colors,
         transformation = SurfaceTransformation(transformationSpec),

@@ -8,6 +8,8 @@
     <string name="remove_from_favorites">Remove from favorites</string>
     <!-- The small heart on a favorite song's row, as screen readers say it. -->
     <string name="favorite">Favorite</string>
+    <!-- What holding a song does, as screen readers offer it: "Double-tap and hold to open song options". -->
+    <string name="open_song_options">Open song options</string>
     <string name="no_favorites_title">No favorites yet</string>
     <string name="no_favorites_text">Tap the heart on Now playing, or swipe a song left.</string>
     <string name="albums">Albums</string>

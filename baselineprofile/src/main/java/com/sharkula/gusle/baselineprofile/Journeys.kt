@@ -98,12 +98,12 @@ private fun MacrobenchmarkScope.tapFirstSong() {
 }
 
 /**
- * Every screen, from Home, as a person uses them: All songs scrolled and a song played, made a
- * favorite with Now playing's heart, seeking in it, the next songs, the Queue scrolled and a song
- * played from it, back to Home with its playing song, an artist's song played from Artists and an
- * album's from Albums, the favorite played from Favorites and removed there with a swipe, Settings
- * with About, Stop playing, and another theme. It ends with nothing playing and no favorites, so no
- * music plays on between runs, and in walnut.
+ * Every screen, from Home, as a person uses them: All songs scrolled, a song's actions opened by
+ * holding its row, and a song played, made a favorite with Now playing's heart, seeking in it, the
+ * next songs, the Queue scrolled and a song played from it, back to Home with its playing song, an
+ * artist's song played from Artists and an album's from Albums, the favorite played from Favorites
+ * and removed there with a swipe, Settings with About, Stop playing, and another theme. It ends with
+ * nothing playing and no favorites, so no music plays on between runs, and in walnut.
  */
 fun MacrobenchmarkScope.useEveryScreen() {
     tap("All songs")
@@ -112,6 +112,7 @@ fun MacrobenchmarkScope.useEveryScreen() {
     repeat(3) { drag(down = true) }
     repeat(3) { fling(down = true) }
     turnCrown(-6)
+    useSongActions(NextSongs.last())
     scrollToAndTap(FirstSong, down = false)
 
     // Now playing: the wavy ring, the cover and its colors, the volume arc, the heart.
@@ -255,6 +256,34 @@ private fun MacrobenchmarkScope.useFavorites() {
 }
 
 /**
+ * In a list of songs, holds [title]'s row, which opens the song's actions over its cover: adds it to
+ * the favorites there and removes it again, so it isn't one after, and goes back to the list.
+ */
+private fun MacrobenchmarkScope.useSongActions(title: String) {
+    hold(scrollTo(title, down = false))
+    // Its actions, once they've slid in. Not Now playing, which a tap would have opened: its heart
+    // says the same.
+    val heart = waitForAny(AddFavorite, RemoveFavorite)
+    waitUntilStill(heart)
+    check(find("Next song") == null) { "Holding \"$title\" opened Now playing rather than its actions" }
+    // A run that stopped half way may have left it a favorite.
+    if (heart == RemoveFavorite) {
+        tap(RemoveFavorite)
+        waitFor(AddFavorite)
+    }
+    // The cover comes up once it's read.
+    tap(AddFavorite)
+    waitFor(RemoveFavorite)
+    Thread.sleep(1_000)
+    tap(RemoveFavorite)
+    waitFor(AddFavorite)
+    Thread.sleep(500)
+    pressBack()
+    waitUntilGone(AddFavorite)
+    waitUntilStill(title)
+}
+
+/**
  * From Now playing, opens the seek screen by the time under the title, turns the crown on through
  * the song and back, which jumps each time it stops, jumps 10 s on with the button, and goes back.
  */
@@ -335,6 +364,18 @@ private fun MacrobenchmarkScope.onScreen(): List<Pair<String, Rect>> {
     return shown
 }
 
+/** Waits for one of [labels] to be on the screen, and returns it. */
+private fun MacrobenchmarkScope.waitForAny(vararg labels: String): String {
+    val until = SystemClock.uptimeMillis() + WaitMs
+    while (true) {
+        labels.firstOrNull { find(it) != null }?.let { return it }
+        check(SystemClock.uptimeMillis() < until) {
+            "None of ${labels.toList()} is on the screen, which shows ${onScreen().map { (text, _) -> text }}"
+        }
+        Thread.sleep(PollMs)
+    }
+}
+
 /** Waits for [label] to be on the screen, and returns where it is. */
 private fun MacrobenchmarkScope.waitFor(label: String): Rect {
     val until = SystemClock.uptimeMillis() + WaitMs
@@ -378,12 +419,25 @@ private fun MacrobenchmarkScope.tap(bounds: Rect) {
     device.click(bounds.centerX(), bounds.centerY())
 }
 
+/** Holds a finger still on [bounds] for 0.8 s, twice the watch's touch-and-hold delay. */
+private fun MacrobenchmarkScope.hold(bounds: Rect) {
+    // By the shell, which holds as long as it's told; UiDevice.swipe's steps take as long as the
+    // device makes them, which can be shorter than a long press.
+    val (x, y) = bounds.centerX() to bounds.centerY()
+    device.executeShellCommand("input swipe $x $y $x $y 800")
+}
+
+/** Drags the list until the row with [title] is well on the screen ([scrollTo]), and taps it. */
+private fun MacrobenchmarkScope.scrollToAndTap(title: String, down: Boolean) {
+    tap(scrollTo(title, down))
+}
+
 /**
  * Drags the list until the row with [title] is well on the screen, away from the round edges where
- * rows shrink, and taps it: towards the list's end first if [down], else towards its start, and
- * the other way once it goes no further.
+ * rows shrink, and returns where it is: towards the list's end first if [down], else towards its
+ * start, and the other way once it goes no further.
  */
-private fun MacrobenchmarkScope.scrollToAndTap(title: String, down: Boolean) {
+private fun MacrobenchmarkScope.scrollTo(title: String, down: Boolean): Rect {
     val height = device.displayHeight
     val middle = height / 4..height * 3 / 4
     for (towardsEnd in listOf(down, !down)) {
@@ -393,10 +447,7 @@ private fun MacrobenchmarkScope.scrollToAndTap(title: String, down: Boolean) {
             val now = onScreen()
             val row = now.firstOrNull { (label, _) -> label == title }?.second
             if (row != null) {
-                if (row.centerY() in middle) {
-                    tap(row)
-                    return
-                }
+                if (row.centerY() in middle) return row
                 // In sight near an edge: a little towards it.
                 drag(down = row.centerY() > middle.last, fraction = 0.2f)
                 continue

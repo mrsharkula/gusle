@@ -50,6 +50,7 @@ import com.sharkula.gusle.ui.queue.QueueScreen
 import com.sharkula.gusle.ui.settings.AboutScreen
 import com.sharkula.gusle.ui.settings.SettingsScreen
 import com.sharkula.gusle.ui.settings.ThemeScreen
+import com.sharkula.gusle.ui.songs.SongActionsScreen
 import com.sharkula.gusle.ui.songs.SongListScreen
 import com.sharkula.gusle.ui.theme.GusleTheme
 import com.sharkula.gusle.ui.theme.LocalAppTheme
@@ -98,6 +99,13 @@ sealed interface Screen : NavKey {
     @Serializable
     data object Seek : Screen
 
+    /**
+     * What can be done to the song with [songId], opened by holding it: at [place], for the actions
+     * that will need to know, e.g. which of a playlist's entries it is when the song is there twice.
+     */
+    @Serializable
+    data class SongActions(val songId: Long, val place: SongPlace = SongPlace.Library) : Screen
+
     @Serializable
     data object Settings : Screen
 
@@ -106,6 +114,24 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object About : Screen
+}
+
+/** Where a song was held to open its actions ([Screen.SongActions]). */
+@Serializable
+sealed interface SongPlace {
+    /**
+     * The song itself, wherever it was: a list of songs (All songs, an artist's or an album's songs,
+     * Favorites), Home's playing song, Now playing or the seek screen.
+     */
+    @Serializable
+    data object Library : SongPlace
+
+    /**
+     * The player's item [window] in the Queue, where a song can be twice. Nothing reads it yet; an
+     * action that will must check the item there is still this song, as the queue may have changed.
+     */
+    @Serializable
+    data class InQueue(val window: Int) : SongPlace
 }
 
 /**
@@ -183,12 +209,14 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
         }
     }
     // An artist or album whose songs are all gone when they're read anew closes, wherever it is in
-    // the stack, rather than showing no songs; so does one the stack was saved with.
+    // the stack, rather than showing no songs; so does one the stack was saved with, and a song's
+    // actions once the song is gone.
     LaunchedEffect(songs) {
         backStack.removeAll { screen ->
             when (screen) {
                 is Screen.Artist -> screen.key !in songs.artistsByKey
                 is Screen.Album -> screen.key !in songs.albumsByKey
+                is Screen.SongActions -> screen.songId !in songs.byId
                 else -> false
             }
         }
@@ -202,6 +230,17 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
     }
 
     fun slidesIn(screen: Screen) = if (slidingIn == screen) SlideIn else emptyMap()
+
+    /**
+     * Opens the actions of a [song] that was held, at [place], on top of the screen it was held on.
+     * The same ones lower down go, rather than closing the screens above them to go back there:
+     * e.g. Now playing, opened from the watch's media controls over the actions of its song.
+     */
+    fun songActions(song: Song, place: SongPlace = SongPlace.Library) {
+        val screen = Screen.SongActions(song.id, place)
+        backStack.remove(screen)
+        go(screen)
+    }
 
     /**
      * The songs in [list] under their [title], played from the tapped one, or shuffled, as songs
@@ -228,6 +267,7 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
             // Rather than starting it again: on a watch, taps happen by accident.
             onPlayingSong = { go(Screen.NowPlaying) },
             onFavorite = rememberSetFavorite(),
+            onSongActions = { songActions(it) },
             heartsShown = source != QueueSource.Favorites,
         )
     }
@@ -275,6 +315,7 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                         playingIsFavorite = playing != null && playing in favorites,
                         // It goes on as it is.
                         onPlaying = { go(Screen.NowPlaying) },
+                        onPlayingActions = { playing?.let { songActions(it) } },
                         onAllSongs = { go(Screen.AllSongs) },
                         onArtists = { go(Screen.Artists) },
                         onAlbums = { go(Screen.Albums) },
@@ -362,15 +403,37 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                 }
             }
             entry<Screen.NowPlaying>(metadata = slidesIn(Screen.NowPlaying)) {
-                NowPlayingScreen(player, songs.byId, onQueue = { go(Screen.Queue) }, onSeek = { go(Screen.Seek) })
+                NowPlayingScreen(
+                    player,
+                    songs.byId,
+                    onQueue = { go(Screen.Queue) },
+                    onSeek = { go(Screen.Seek) },
+                    onSongActions = { songActions(it) },
+                )
             }
             entry<Screen.Seek>(metadata = slidesIn(Screen.Seek)) {
-                SeekScreen(player, songs.byId)
+                SeekScreen(player, songs.byId, onSongActions = { songActions(it) })
             }
             entry<Screen.Queue>(metadata = slidesIn(Screen.Queue)) {
                 PlayingSongTheme(songs) { _, _ ->
                     // Its song is Now playing's: tapping it goes back there, also when tapped twice.
-                    QueueScreen(player, songs.byId, onPlayingSong = { go(Screen.NowPlaying) })
+                    QueueScreen(
+                        player,
+                        songs.byId,
+                        onPlayingSong = { go(Screen.NowPlaying) },
+                        onSongActions = { song, window -> songActions(song, SongPlace.InQueue(window)) },
+                    )
+                }
+            }
+            // In the colors of the screen it was opened from: the playing song's. Once the song is gone
+            // it closes (see above), still showing it as it goes; one a saved stack brings back shows
+            // nothing until then.
+            entry<Screen.SongActions>(metadata = { slidesIn(it) }) { screen ->
+                val song = lastNotNull(songs.byId[screen.songId]) ?: return@entry
+                PlayingSongTheme(songs) { _, _ ->
+                    val favorites = rememberFavorites()
+                    val setFavorite = rememberSetFavorite()
+                    SongActionsScreen(song, isFavorite = song in favorites, onFavorite = { setFavorite(song, it) })
                 }
             }
             // In the playing song's colors too, so opening them from Home doesn't change the colors.

@@ -72,6 +72,7 @@ import com.sharkula.gusle.R
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.playback.songId
 import com.sharkula.gusle.ui.components.formatLength
+import com.sharkula.gusle.ui.components.onLongPress
 import com.sharkula.gusle.ui.components.rememberLengthInWords
 import com.sharkula.gusle.ui.components.rememberMayAnimateState
 import com.sharkula.gusle.ui.components.rememberScreenShown
@@ -93,23 +94,29 @@ import kotlinx.coroutines.withTimeoutOrNull
  * Seeking in the playing song: where it is, big, and along the edge. Turning the crown moves
  * through the song, and it jumps there half a second after the crown stops; −10 s and +10 s jump at
  * once. In the song's colors, over its cover, dimmed. It follows the player like Now playing, also
- * on to the next song, and stays open after a jump, so the song can be nudged again.
+ * on to the next song, and stays open after a jump, so the song can be nudged again. Holding the
+ * title opens the song's actions ([onSongActions]), as on Now playing.
  */
 @Composable
-fun SeekScreen(connection: PlayerConnection, songsById: Map<Long, Song>) {
+fun SeekScreen(connection: PlayerConnection, songsById: Map<Long, Song>, onSongActions: (Song) -> Unit) {
     val player = connection.rememberShownPlayer()
 
     ScreenScaffold {
         // Just the clock until the player first connects, which takes milliseconds.
         if (player != null) {
-            Seek(connection, player, songsById)
+            Seek(connection, player, songsById, onSongActions)
         }
     }
 }
 
 @OptIn(UnstableApi::class)
 @Composable
-private fun Seek(connection: PlayerConnection, player: Player, songsById: Map<Long, Song>) {
+private fun Seek(
+    connection: PlayerConnection,
+    player: Player,
+    songsById: Map<Long, Song>,
+    onSongActions: (Song) -> Unit,
+) {
     val item = rememberCurrentMediaItemState(player)
     val shown = rememberScreenShown()
     val progress = rememberProgress(connection, player, shown)
@@ -151,6 +158,8 @@ private fun Seek(connection: PlayerConnection, player: Player, songsById: Map<Lo
         onCrownStep = remember(seek) { seek::step },
         onBack = onBack,
         onForward = onForward,
+        // None for a song deleted while it plays.
+        onSongActions = remember(song, onSongActions) { song?.let { { onSongActions(it) } } },
     )
 }
 
@@ -325,9 +334,6 @@ private fun rememberHint(shown: State<Boolean>, mayAnimate: State<Boolean>): Sta
     return alpha.asState()
 }
 
-/** The design's cover is dimmed more here than on Now playing, for the numbers over it. */
-private const val SeekCoverAlpha = 0.45f
-
 /**
  * Turning the crown as far as would scroll a list by this much moves the song a step: as for the
  * volume on Now playing.
@@ -357,8 +363,11 @@ private fun Seek(
     /** Null while there's no song, or its length isn't known, which disables the buttons. */
     onBack: (() -> Unit)?,
     onForward: (() -> Unit)?,
+    /** Holding the title; null while there's no song, when holding does nothing. */
+    onSongActions: (() -> Unit)?,
 ) {
     val haptics = LocalHapticFeedback.current
+    val actionsLabel = stringResource(R.string.open_song_options)
     val crownStepPx = with(LocalDensity.current) { SeekCrownStep.toPx() }
     val crown = remember(crownStepPx) { CrownSteps(crownStepPx) }
     GusleTheme(colorScheme = art?.colors) {
@@ -379,14 +388,15 @@ private fun Seek(
                     // Takes the crown's input without being something to stop at for TalkBack.
                     .focusTarget(),
             ) {
-                if (art != null) Cover(art.picture, SeekCoverAlpha, Modifier.align(Alignment.Center))
+                if (art != null) Cover(art.picture, DimmedCoverAlpha, Modifier.align(Alignment.Center))
                 SeekRing(positionMs, landingMs, durationMs, Modifier.fillMaxSize())
                 Text(
                     title,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .padding(start = 44.dp, top = 34.dp, end = 44.dp)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .then(if (onSongActions != null) Modifier.onLongPress(actionsLabel, haptics, onSongActions) else Modifier),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
@@ -646,6 +656,7 @@ private fun SeekPreview(landingMs: Long?, hintAlpha: Float) {
                     onCrownStep = { _, _ -> true },
                     onBack = {},
                     onForward = {},
+                    onSongActions = {},
                 )
             }
         }
