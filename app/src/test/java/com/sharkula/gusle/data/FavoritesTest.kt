@@ -88,6 +88,33 @@ class FavoritesTest {
         assertFalse(song(4) in favorites().loaded())
     }
 
+    /** Deleted from the watch: gone for good, also when it was marked on a song of another length. */
+    @Test
+    fun aForgottenSongIsGoneForGood() {
+        val favorites = favorites()
+        favorites.loaded()
+        favorites.set(song(1), true)
+        favorites.set(song(2), true)
+        val changesBefore = changes
+        favorites.forget(1)
+        assertEquals(listOf(2L), favorites.songs.value.ids())
+        assertEquals(changesBefore + 1, changes)
+        // Not on the watch, and its length doesn't matter: it's gone from the file too.
+        assertEquals(listOf(2L), favorites().loaded().ids())
+        // Nothing to forget: no change.
+        favorites.forget(1)
+        assertEquals(changesBefore + 1, changes)
+    }
+
+    @Test
+    fun aSongForgottenBeforeTheReadIsGoneOnceRead() {
+        favorites().apply { loaded(); set(song(1), true); set(song(3), true) }
+        val favorites = favorites()
+        favorites.forget(3)
+        assertEquals(listOf(1L), favorites.loaded().ids())
+        assertEquals(listOf(1L), favorites().loaded().ids())
+    }
+
     @Test
     fun aSongAddedTwiceKeepsWhenItWasFirstAdded() {
         val favorites = favorites()

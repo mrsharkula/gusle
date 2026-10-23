@@ -147,6 +147,24 @@ class Favorites internal constructor(
     }
 
     /**
+     * Forgets the song with [songId] for good, whatever song it was marked on: e.g. once it's deleted
+     * from the watch, as MediaStore may give its ID to a file added later. Unlike [set], it needs no
+     * [Song]: one deleted is no longer among the songs.
+     */
+    @MainThread
+    fun forget(songId: Long) {
+        val now = favorites.value
+        if (known) {
+            if (now[songId] == null) return
+            prefs.edit { write(songId, null) }
+        } else {
+            changedBeforeRead[songId] = null
+        }
+        favorites.value = now.with(songId, null)
+        onChange()
+    }
+
+    /**
      * Matches the favorites with the songs on the watch, [songsById], once they're loaded: a song
      * with a favorite's ID but another length is another song, so the favorite goes; one kept without
      * its length gets it. Nothing to show changes: such songs weren't shown as favorites anyway.

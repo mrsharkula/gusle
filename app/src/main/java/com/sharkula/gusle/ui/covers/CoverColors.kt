@@ -25,6 +25,7 @@ import coil3.toBitmap
 import com.materialkolor.quantize.QuantizerCelebi
 import com.materialkolor.score.Score
 import com.sharkula.gusle.coverColors
+import com.sharkula.gusle.ui.LocalHiddenDepth
 import com.sharkula.gusle.ui.theme.seedColorScheme
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Deferred
@@ -239,12 +240,16 @@ class CoverColors(private val context: Context) {
  * itself: right away when they're known, otherwise those shown for the song before stay until
  * they're ready. Null for the app theme's ([com.sharkula.gusle.ui.theme.GusleTheme] fills them
  * in): at first, and for a song without colors of its own. They jump rather than fade, since fading
- * every role would recompose the whole screen each frame.
+ * every role would recompose the whole screen each frame. Only a screen that can be seen makes
+ * them those shown for every screen: one hidden below another holds the song from a moment ago
+ * ([LocalHiddenDepth]), or none once that song is deleted, which would put every screen in the
+ * theme's colors meanwhile.
  */
 @Composable
 fun playingSongColors(cover: SongCover?): ColorScheme? {
     val coverColors = LocalContext.current.coverColors
-    LaunchedEffect(cover) { coverColors.show(cover) }
+    val seen = LocalHiddenDepth.current == 0
+    LaunchedEffect(cover, seen) { if (seen) coverColors.show(cover) }
     if (cover == null) return null
     val known = coverColors.known(cover) ?: return coverColors.playingColors
     return known.scheme

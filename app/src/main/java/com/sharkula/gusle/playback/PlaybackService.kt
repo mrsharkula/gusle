@@ -144,6 +144,7 @@ class PlaybackService : MediaSessionService() {
             },
         )
         player.addListener(followPlayer)
+        playing.serviceStarted(dropSong = ::dropDeletedSong)
         val lookup = SongLookup(musicLibrary, lastPlayed, packageName, scope, stopAndForget = { stopAndForget(player) })
         session = MediaSession.Builder(this, player)
             // Tapping the watch's media controls opens Gusle on Now playing, or brings it back there
@@ -264,6 +265,29 @@ class PlaybackService : MediaSessionService() {
         player.stop()
         player.clearMediaItems()
         pauseAllPlayersAndStopSelf()
+    }
+
+    /**
+     * Drops the song with [songId], deleted from the watch, from the queue: every item of it. If it
+     * was on one, it moves on first, as at the song's end: to the next one, which plays if it was
+     * playing; after the last, back to the one before it, paused at its start ([afterDeleting]).
+     * With no other song left, it stops and forgets the queue, as Stop playing does. The changes
+     * are saved as any others.
+     */
+    private fun dropDeletedSong(songId: Long) {
+        val songIds = List(player.mediaItemCount) { player.getMediaItemAt(it).songId }
+        val playOrder = player.currentTimeline.playOrder(player.shuffleModeEnabled)
+        when (val after = afterDeleting(songIds, playOrder, player.currentMediaItemIndex, songId)) {
+            null -> Unit
+            AfterDeleting.NothingLeft -> stopAndForget(player)
+            is AfterDeleting.Remove -> {
+                // Paused before it goes there, so the song it goes to never starts: at the end of the
+                // list the player is ended, which still counts as asked to play.
+                if (after.pause) player.pause()
+                after.moveTo?.let { player.seekTo(it, /* positionMs = */ 0) }
+                after.remove.forEach(player::removeMediaItem)
+            }
+        }
     }
 
     private fun saveWhilePlaying() {

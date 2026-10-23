@@ -8,6 +8,7 @@ import androidx.media3.common.util.Util
 import com.sharkula.gusle.data.MusicLibrary
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,7 +41,8 @@ val Player.knownDurationMs: Long? get() = duration.takeIf { it != C.TIME_UNSET }
  * The song in the playback service's player, for the screens that show it without connecting to
  * the service: connecting would start it. Without one, it's the song the player had last
  * ([LastPlayed]), paused: the service comes back to it when it starts. The app keeps one; only the
- * service changes it, apart from Stop playing forgetting a saved song ([forgetIfOnlySaved]).
+ * service changes it, apart from Stop playing forgetting a saved song ([forgetIfOnlySaved]) and a
+ * song deleted from the watch ([forgetDeleted]).
  * [onChange] runs whenever the song or whether it plays changes, though not as the saved one is
  * first read: the tile follows it.
  */
@@ -49,7 +51,11 @@ class PlayingSongHolder(
     private val lastPlayed: LastPlayed,
     private val onChange: () -> Unit = {},
 ) {
+    private val scope = MainScope()
     private val playing = MutableStateFlow<PlayingSong?>(null)
+
+    /** How the running service drops a deleted song from its player's queue; null while it's stopped. */
+    private var dropFromPlayer: ((songId: Long) -> Unit)? = null
 
     /** The player's song while the service is running and its player has one. */
     private var fromPlayer: PlayingSong? = null
@@ -76,13 +82,21 @@ class PlayingSongHolder(
     val inForeground: StateFlow<Boolean> = foreground.asStateFlow()
 
     init {
-        MainScope().launch {
+        scope.launch {
             // Read off the main thread. The screens wait for the songs to be read anyway, which
             // takes longer.
             lastPlayed.load()
             // If the song saved last is deleted, the service comes back to the next one left.
             library.songs.collect { show() }
         }
+    }
+
+    /**
+     * The service started; [dropSong] drops a song deleted from the watch from its player's queue
+     * (see [forgetDeleted]).
+     */
+    fun serviceStarted(dropSong: (songId: Long) -> Unit) {
+        dropFromPlayer = dropSong
     }
 
     /** Takes the song [player] has now, and whether it plays on ([playsOn]). */
@@ -124,6 +138,25 @@ class PlayingSongHolder(
         return true
     }
 
+    /**
+     * The song with [songId] was deleted from the watch: it leaves the queue. While the service's
+     * player has a song, the service drops it from the player's queue right now, so the player has
+     * moved on before the songs are read again and no screen sees the player's song gone from them.
+     * Otherwise it leaves the saved queue, which moves on to the next song as the service would,
+     * without starting the service.
+     */
+    fun forgetDeleted(songId: Long) {
+        if (fromPlayer != null) {
+            dropFromPlayer?.invoke(songId)
+            return
+        }
+        // At once: the saved queue was read as the app started.
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            lastPlayed.forgetSong(songId)
+            show()
+        }
+    }
+
     /** The service went into the foreground, or left it. */
     fun inForeground(inForeground: Boolean) {
         foreground.value = inForeground
@@ -133,6 +166,7 @@ class PlayingSongHolder(
     fun serviceStopped() {
         fromPlayer = null
         player = null
+        dropFromPlayer = null
         foreground.value = false
         show()
     }

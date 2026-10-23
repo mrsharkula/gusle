@@ -26,6 +26,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.serialization.NavBackStackSerializer
 import androidx.navigation3.ui.NavDisplay
 import androidx.wear.compose.material3.Icon
+import androidx.wear.compose.material3.MaterialTheme
 import com.sharkula.gusle.R
 import com.sharkula.gusle.data.FavoriteSongs
 import com.sharkula.gusle.data.Song
@@ -50,8 +51,10 @@ import com.sharkula.gusle.ui.queue.QueueScreen
 import com.sharkula.gusle.ui.settings.AboutScreen
 import com.sharkula.gusle.ui.settings.SettingsScreen
 import com.sharkula.gusle.ui.settings.ThemeScreen
+import com.sharkula.gusle.ui.songs.DeletionStep
 import com.sharkula.gusle.ui.songs.SongActionsScreen
 import com.sharkula.gusle.ui.songs.SongListScreen
+import com.sharkula.gusle.ui.songs.rememberSongDeletion
 import com.sharkula.gusle.ui.theme.GusleTheme
 import com.sharkula.gusle.ui.theme.LocalAppTheme
 import kotlinx.serialization.Serializable
@@ -127,8 +130,9 @@ sealed interface SongPlace {
     data object Library : SongPlace
 
     /**
-     * The player's item [window] in the Queue, where a song can be twice. Nothing reads it yet; an
-     * action that will must check the item there is still this song, as the queue may have changed.
+     * The player's item [window] in the Queue, where a song can be twice. Nothing reads it yet (Delete
+     * deletes the song itself, so every item of it goes); an action that will must check the item
+     * there is still this song, as the queue may have changed.
      */
     @Serializable
     data class InQueue(val window: Int) : SongPlace
@@ -427,13 +431,25 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
             }
             // In the colors of the screen it was opened from: the playing song's. Once the song is gone
             // it closes (see above), still showing it as it goes; one a saved stack brings back shows
-            // nothing until then.
+            // nothing until then. Deleted, it keeps its colors and heart until it has closed, though
+            // the player moves on and the song stops being a favorite meanwhile.
             entry<Screen.SongActions>(metadata = { slidesIn(it) }) { screen ->
+                // First: Android's answer must arrive even when Gusle is restored without the song.
+                val deletion = rememberSongDeletion(screen.songId)
                 val song = lastNotNull(songs.byId[screen.songId]) ?: return@entry
+                val deleted = deletion.step == DeletionStep.Deleted
                 PlayingSongTheme(songs) { _, _ ->
-                    val favorites = rememberFavorites()
-                    val setFavorite = rememberSetFavorite()
-                    SongActionsScreen(song, isFavorite = song in favorites, onFavorite = { setFavorite(song, it) })
+                    MaterialTheme(colorScheme = keptWhile(deleted, MaterialTheme.colorScheme)) {
+                        val favorites = rememberFavorites()
+                        val setFavorite = rememberSetFavorite()
+                        SongActionsScreen(
+                            song,
+                            isFavorite = keptWhile(deleted, song in favorites),
+                            onFavorite = if (deleted) null else { favorite -> setFavorite(song, favorite) },
+                            deletion = deletion,
+                            onTop = backStack.lastOrNull() == screen,
+                        )
+                    }
                 }
             }
             // In the playing song's colors too, so opening them from Home doesn't change the colors.
@@ -474,15 +490,17 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
  * gone, until their screen has closed.
  */
 @Composable
-private fun <T : Any> lastNotNull(value: T?): T? {
-    val last = remember { LastNotNull<T>() }
-    SideEffect { if (value != null) last.value = value }
-    return value ?: last.value
+private fun <T : Any> lastNotNull(value: T?): T? = keptWhile(held = value == null, value)
+
+/** [value], or while [held], the last value it had before. */
+@Composable
+private fun <T> keptWhile(held: Boolean, value: T): T {
+    val kept = remember { Kept(value) }
+    SideEffect { if (!held) kept.value = value }
+    return if (held) kept.value else value
 }
 
-private class LastNotNull<T : Any> {
-    var value: T? = null
-}
+private class Kept<T>(var value: T)
 
 /**
  * A screen in the colors of the player's song's cover, without connecting to the player.

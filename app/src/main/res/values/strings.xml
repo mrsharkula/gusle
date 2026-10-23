@@ -10,6 +10,15 @@
     <string name="favorite">Favorite</string>
     <!-- What holding a song does, as screen readers offer it: "Double-tap and hold to open song options". -->
     <string name="open_song_options">Open song options</string>
+    <!-- The button on a song's actions that deletes it from the watch; screen readers say
+         delete_from_watch instead. -->
+    <string name="delete">Delete</string>
+    <string name="delete_from_watch">Delete from the watch</string>
+    <!-- Gusle's question before Android's own, e.g. "Delete “Bismarck” from the watch?". -->
+    <string name="delete_song_question">Delete “%1$s” from the watch?</string>
+    <!-- Said to screen readers once a song is deleted and its actions have closed. -->
+    <string name="deleted">Deleted</string>
+    <string name="couldnt_delete">Couldn\'t delete</string>
     <string name="no_favorites_title">No favorites yet</string>
     <string name="no_favorites_text">Tap the heart on Now playing, or swipe a song left.</string>
     <string name="albums">Albums</string>

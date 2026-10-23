@@ -7,6 +7,8 @@ import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import androidx.wear.ambient.AmbientLifecycleObserver
 import androidx.wear.compose.material3.AppScaffold
@@ -16,6 +18,7 @@ import com.sharkula.gusle.ui.access.MusicAccessGate
 import com.sharkula.gusle.ui.ambient.AmbientMode
 import com.sharkula.gusle.ui.ambient.AmbientState
 import com.sharkula.gusle.ui.ambient.LocalAmbient
+import com.sharkula.gusle.ui.components.Announcement
 import com.sharkula.gusle.ui.songs.SongsGate
 import com.sharkula.gusle.ui.theme.GusleTheme
 import com.sharkula.gusle.ui.theme.LocalAppTheme
@@ -65,6 +68,7 @@ class MainActivity : ComponentActivity() {
         val themes = themeChoice
         lifecycleScope.launch { themes.load() }
         val library = musicLibrary
+        val announcer = announcer
         setContent {
             // Nothing until it's known (it usually is by the first frame), so no screen, nor the
             // clock, shows in the default theme first. Around the gates, so their screens follow it.
@@ -79,6 +83,8 @@ class MainActivity : ComponentActivity() {
                                         GusleNavHost(songs, openNowPlaying, onWentBack = { wentBack = true })
                                     }
                                 }
+                                // Over the gates too: e.g. "Deleted" once the last song is gone.
+                                Announcement(announcer, Modifier.align(Alignment.BottomCenter))
                             }
                         }
                     }

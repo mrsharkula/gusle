@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- What Android may back up, or move to a new watch. Everything but the queue Gusle comes back to
-     (playback/LastPlayed.kt) and the favorite songs (data/Favorites.kt): they name songs by their
+     (playback/LastPlayed.kt), the favorite songs (data/Favorites.kt) and a song being deleted
+     (ui/songs/SongDeletion.kt): they name songs by their
      MediaStore IDs, which are other songs, or none, on another watch or after the music is copied
      again. Nor what Gusle knows of this
      watch's tile (tile/TileRecord.kt), nor the key that lets the tile open Now playing
@@ -10,6 +11,7 @@
         <exclude domain="sharedpref" path="last_played_queue.xml" />
         <exclude domain="sharedpref" path="last_played_position.xml" />
         <exclude domain="sharedpref" path="favorites.xml" />
+        <exclude domain="sharedpref" path="song_deletion.xml" />
         <exclude domain="sharedpref" path="tile.xml" />
         <exclude domain="sharedpref" path="now_playing_key.xml" />
     </cloud-backup>
@@ -17,6 +19,7 @@
         <exclude domain="sharedpref" path="last_played_queue.xml" />
         <exclude domain="sharedpref" path="last_played_position.xml" />
         <exclude domain="sharedpref" path="favorites.xml" />
+        <exclude domain="sharedpref" path="song_deletion.xml" />
         <exclude domain="sharedpref" path="tile.xml" />
         <exclude domain="sharedpref" path="now_playing_key.xml" />
     </device-transfer>

@@ -13,9 +13,11 @@ import com.sharkula.gusle.playback.PlayingSong
 import com.sharkula.gusle.playback.PlayingSongHolder
 import com.sharkula.gusle.playback.UnplayableSongs
 import com.sharkula.gusle.tile.TileUpdates
+import com.sharkula.gusle.ui.components.Announcer
 import com.sharkula.gusle.ui.covers.CoverColors
 import com.sharkula.gusle.ui.covers.SongCoverFetcher
 import com.sharkula.gusle.ui.covers.SongCoverKeyer
+import com.sharkula.gusle.ui.songs.SongDeleter
 import com.sharkula.gusle.ui.theme.ThemeChoice
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.StateFlow
@@ -61,6 +63,12 @@ class GusleApp : Application(), SingletonImageLoader.Factory {
         }
     }
 
+    /** What screen readers are told that no screen shows, e.g. that a song was deleted. */
+    val announcer by lazy { Announcer() }
+
+    /** What follows a song's deletion, which outlives the screens that asked for it. */
+    val songDeleter by lazy { SongDeleter(this, library, playing, { favorites }, announcer) }
+
     /** The secret that lets the tile open Now playing. */
     val nowPlayingKey by lazy { NowPlayingKey(this) }
 
@@ -70,6 +78,8 @@ class GusleApp : Application(), SingletonImageLoader.Factory {
         playing = PlayingSongHolder(library, lastPlayed, onChange = { tileUpdates.changed() })
         // The songs read anew may change the tile too, e.g. once there are some to shuffle.
         MainScope().launch { library.songs.drop(1).collect { tileUpdates.changed() } }
+        // A song deleted while Gusle's process died under Android's screen: its answer never came.
+        MainScope().launch { songDeleter.finishLeftover() }
     }
 
     /** Coil's image loader, taught to load covers from song files. */
@@ -99,6 +109,12 @@ val Context.unplayableSongs: UnplayableSongs get() = (applicationContext as Gusl
 
 /** The app's one [Favorites], from any of its contexts. */
 val Context.favorites: Favorites get() = (applicationContext as GusleApp).favorites
+
+/** The app's one [Announcer], from any of its contexts. */
+val Context.announcer: Announcer get() = (applicationContext as GusleApp).announcer
+
+/** The app's one [SongDeleter], from any of its contexts. */
+val Context.songDeleter: SongDeleter get() = (applicationContext as GusleApp).songDeleter
 
 /** The app's one [ThemeChoice], from any of its contexts. */
 val Context.themeChoice: ThemeChoice get() = (applicationContext as GusleApp).themeChoice

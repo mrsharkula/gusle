@@ -29,6 +29,20 @@ fun nextPlayable(playOrder: List<Int>, from: Int, backwards: Boolean, isPlayable
     return ahead.firstOrNull(isPlayable)
 }
 
+/** Where a queue goes from a song that's gone ([moveOnFrom]): to the song at [to], back to one before it if [wentBack]. */
+data class MoveOn(val to: Int, val wentBack: Boolean)
+
+/**
+ * Where a queue playing in [playOrder] goes from the song at [current] once that song is gone: to
+ * the next one in play order that [isLeft], or with none after it, back to the nearest one before it.
+ * Null when none is left. The one rule for a saved queue ([SavedQueue.keepOnly]) and the player
+ * ([afterDeleting]).
+ */
+fun moveOnFrom(playOrder: List<Int>, current: Int, isLeft: (Int) -> Boolean): MoveOn? {
+    nextPlayable(playOrder, current, backwards = false, isLeft)?.let { return MoveOn(it, wentBack = false) }
+    return nextPlayable(playOrder, current, backwards = true, isLeft)?.let { MoveOn(it, wentBack = true) }
+}
+
 /** A shuffled order of [count] songs that starts with the one at [first]: the rest follow at random. */
 fun shuffledFrom(first: Int, count: Int, random: Random): IntArray =
     intArrayOf(first) + (0 until count).filter { it != first }.shuffled(random)

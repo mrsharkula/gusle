@@ -96,6 +96,44 @@ class LastPlayedTest {
         assertEquals(newer, lastPlayed.loaded())
     }
 
+    /** The queue plays 30, 10, 20 (shuffled); it was on 20 at 31.5 s. */
+    @Test
+    fun aDeletedSongLeavesTheSavedQueue() {
+        lastPlayed().save(queue)
+        val lastPlayed = lastPlayed()
+        runBlocking { lastPlayed.forgetSong(30) }
+        val left = SavedQueue(listOf(10L, 20L), shuffleOrder = listOf(0, 1), current = 1, positionMs = 31_500)
+        assertEquals(left, lastPlayed.saved)
+        // And on disk: Gusle started again comes back to it.
+        assertEquals(left, lastPlayed().loaded())
+    }
+
+    @Test
+    fun aDeletedSongItWasOnMovesItBackWhenItWasTheLast() {
+        lastPlayed().save(queue)
+        val lastPlayed = lastPlayed()
+        runBlocking { lastPlayed.forgetSong(20) }
+        // 20 was the last to play: back to 10, before it, from its start.
+        assertEquals(SavedQueue(listOf(10L, 30L), shuffleOrder = listOf(1, 0), current = 0, positionMs = 0), lastPlayed().loaded())
+    }
+
+    @Test
+    fun aDeletedSongThatWasTheOnlyOneForgetsTheQueue() {
+        lastPlayed().save(SavedQueue(listOf(10L, 10L), shuffleOrder = null, current = 1, positionMs = 2_000))
+        val lastPlayed = lastPlayed()
+        runBlocking { lastPlayed.forgetSong(10) }
+        assertNull(lastPlayed.saved)
+        assertNull(lastPlayed().loaded())
+    }
+
+    @Test
+    fun aDeletedSongThatIsNotInTheQueueWritesNothing() {
+        lastPlayed().save(queue)
+        val writes = files.values.sumOf { it.writes }
+        runBlocking { lastPlayed().forgetSong(99) }
+        assertEquals(writes, files.values.sumOf { it.writes })
+    }
+
     @Test
     fun aValueOfAnotherTypeReadsAsNothing() {
         lastPlayed().save(queue)

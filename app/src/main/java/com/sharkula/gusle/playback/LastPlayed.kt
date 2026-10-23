@@ -32,7 +32,7 @@ data class SavedQueue(
     /**
      * This queue with only the songs [isThere] (still on the watch), in the same orders, or null if
      * none of them is. If the song it was on is gone, it's on the next one left in play order, from
-     * its start, or else on the last one left.
+     * its start, or else on the nearest one before it ([moveOnFrom]).
      */
     fun keepOnly(isThere: (songId: Long) -> Boolean): SavedQueue? {
         // Where each song that's left goes in the new queue; -1 for those that are gone.
@@ -46,8 +46,7 @@ data class SavedQueue(
         val newCurrent = if (stays) {
             newIndex[current]
         } else {
-            val next = nextPlayable(playOrder, current, backwards = false) { newIndex[it] >= 0 }
-            newIndex[next ?: playOrderLeft.last()]
+            newIndex[moveOnFrom(playOrder, current) { newIndex[it] >= 0 }?.to ?: playOrderLeft.last()]
         }
         return SavedQueue(
             songIds = songIds.filterIndexed { i, _ -> newIndex[i] >= 0 },
@@ -165,6 +164,19 @@ class LastPlayed internal constructor(openPrefs: (name: String) -> SharedPrefere
         }
         saved = queue
         known = true
+    }
+
+    /**
+     * Drops the song with [songId], deleted from the watch, from the saved queue, every time it's
+     * in it; if it was on it, the queue is on the next song, or the one before (see
+     * [SavedQueue.keepOnly]). A queue with no other song is forgotten. The ID could otherwise come
+     * back as another song's: MediaStore may give it to a file added later.
+     */
+    @MainThread
+    suspend fun forgetSong(songId: Long) {
+        val queue = load() ?: return
+        val left = queue.keepOnly { it != songId }
+        if (left == null) forget() else save(left)
     }
 
     /** Forgets the queue, e.g. once none of its songs is on the watch anymore. */
