@@ -54,9 +54,7 @@ fun PlaylistsScreen(
     onNewPlaylist: () -> Unit,
 ) {
     // Once per list, not as each row is composed again, e.g. as the player plays or pauses.
-    val rows = remember(playlists, songsById) {
-        playlists.map { PlaylistRow(it, it.firstSongIn(songsById), it.countIn(songsById)) }
-    }
+    val rows = remember(playlists, songsById) { playlists.map { PlaylistRow(it, songsById) } }
     if (rows.isEmpty()) {
         MessageScreen(
             icon = R.drawable.ic_queue_music,
@@ -87,8 +85,15 @@ fun PlaylistsScreen(
     )
 }
 
-/** A playlist's row: its first song on the watch, for the cover, and how many it has there. */
-private class PlaylistRow(val playlist: Playlist, val firstSong: Song?, val songCount: Int)
+/**
+ * A playlist's row: its first song on the watch ([songsById]), for the cover, how many it has there,
+ * and how often a [song] is in it (0 without one), for the list of playlists to add it to.
+ */
+internal class PlaylistRow(val playlist: Playlist, songsById: Map<Long, Song>, song: Song? = null) {
+    val firstSong = playlist.firstSongIn(songsById)
+    val songCount = playlist.countIn(songsById)
+    val timesOfSong = song?.let(playlist::timesOf) ?: 0
+}
 
 /**
  * The "+" before "New playlist" in the edge button, and the gap after it: smaller than the other

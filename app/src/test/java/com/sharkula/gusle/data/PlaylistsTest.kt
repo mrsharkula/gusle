@@ -4,6 +4,7 @@ import android.net.TestUri
 import com.sharkula.gusle.FakePrefs
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -16,7 +17,11 @@ class PlaylistsTest {
 
     private fun Playlists.loaded() = runBlocking { load() }
 
-    private fun Playlists.created(name: String) = runBlocking { create(name) }
+    private fun Playlists.created(name: String, song: Song? = null) = runBlocking { create(name, song) }
+
+    private fun Playlists.added(playlistId: Long, songId: Long) = runBlocking { add(playlistId, songs.getValue(songId)) }
+
+    private fun Playlists.entriesOf(playlistId: Long) = all.value!!.single { it.id == playlistId }.entries
 
     private fun song(id: Long, durationMs: Long = 200_000 + id) = Song(id, TestUri, "Song $id", "Sabaton", durationMs, 0)
 
@@ -172,6 +177,169 @@ class PlaylistsTest {
         playlists.forget(3)
         assertEquals(listOf(two), playlists.loaded().single().entries)
         assertEquals(listOf(two), playlists().loaded().single().entries)
+    }
+
+    @Test
+    fun anAddedSongGoesLastAndComesBackAfterARestart() {
+        val two = entry(2)
+        saved(1, "Road trip", two)
+        val playlists = playlists()
+        assertTrue(playlists.added(1, 4))
+        assertEquals(listOf(2L, 4L), playlists.all.value!!.single().songIds())
+        assertEquals(listOf(2L, 4L), playlists().loaded().single().songIds())
+        assertEquals(songs.getValue(4).durationMs, playlists.entriesOf(1).last().durationMs)
+    }
+
+    /** As decided: adding a song that's there already adds it again, as an entry of its own. */
+    @Test
+    fun aSongAddedAgainIsThereTwice() {
+        val playlists = playlists()
+        val id = playlists.created("Road trip")
+        playlists.added(id, 3)
+        playlists.added(id, 3)
+        val entries = playlists.entriesOf(id)
+        assertEquals(listOf(3L, 3L), entries.map { it.songId })
+        assertEquals(2, entries.map { it.id }.distinct().size)
+        assertEquals(2, playlists.all.value!!.single().timesOf(songs.getValue(3)))
+    }
+
+    /** E.g. New playlist on the list of playlists a song is added to. */
+    @Test
+    fun aNewOneCanStartWithASong() {
+        val playlists = playlists()
+        val id = playlists.created("Road trip", songs.getValue(2))
+        assertEquals(listOf(2L), playlists.all.value!!.single().songIds())
+        assertEquals(listOf(2L), playlists().loaded().single { it.id == id }.songIds())
+    }
+
+    @Test
+    fun addingToAPlaylistThatIsntThereDoesNothing() {
+        saved(1, "Road trip")
+        val playlists = playlists()
+        playlists.loaded()
+        val writes = file.writes
+        assertFalse(playlists.added(2, 3))
+        assertEquals(writes, file.writes)
+        assertEquals(emptyList<PlaylistEntry>(), playlists.entriesOf(1))
+    }
+
+    @Test
+    fun entriesInEveryPlaylistGetIdsOfTheirOwn() {
+        val playlists = playlists()
+        val road = playlists.created("Road trip", songs.getValue(1))
+        val workout = playlists.created("Workout", songs.getValue(1))
+        playlists.added(road, 2)
+        playlists.added(workout, 2)
+        val ids = playlists.all.value!!.flatMap { playlist -> playlist.entries.map { it.id } }
+        assertEquals(4, ids.distinct().size)
+    }
+
+    /** E.g. the first of a song that's there twice: the second stays, and so does the rest. */
+    @Test
+    fun removingTakesOutThatOneEntry() {
+        val first = entry(3)
+        val one = entry(1)
+        val second = entry(3)
+        saved(1, "Road trip", first, one, second)
+        saved(2, "Workout", entry(3))
+        val playlists = playlists()
+        playlists.loaded()
+        val workout = playlists.entriesOf(2)
+        playlists.remove(1, first.id, 3)
+        assertEquals(listOf(one, second), playlists.entriesOf(1))
+        assertEquals(workout, playlists.entriesOf(2))
+        assertEquals(listOf(one, second), playlists().loaded().single { it.id == 1L }.entries)
+    }
+
+    /** The playlist changed since the song was held there: the entry is gone, or isn't that song's. */
+    @Test
+    fun removingAnEntryThatIsntThatSongsDoesNothing() {
+        val three = entry(3)
+        saved(1, "Road trip", three)
+        val playlists = playlists()
+        playlists.loaded()
+        val writes = file.writes
+        playlists.remove(1, three.id, 4)
+        playlists.remove(1, three.id + 1, 3)
+        playlists.remove(2, three.id, 3)
+        assertEquals(listOf(three), playlists.entriesOf(1))
+        assertEquals(writes, file.writes)
+    }
+
+    /**
+     * The player's queue may still carry a removed entry, also after a restart: a new one never gets
+     * its ID, not even when it was the newest.
+     */
+    @Test
+    fun anEntryIdIsNeverGivenTwice() {
+        val playlists = playlists()
+        val id = playlists.created("Road trip", songs.getValue(1))
+        playlists.added(id, 2)
+        val newest = playlists.entriesOf(id).last()
+        playlists.remove(id, newest.id, 2)
+        val again = playlists()
+        again.added(id, 2)
+        assertTrue(again.entriesOf(id).last().id > newest.id)
+    }
+
+    /**
+     * The same from data saved before Gusle kept the counter, where it's worked out from the entries:
+     * the newest entry leaves (taken out, its song deleted, or another song's now), then Gusle starts
+     * again. Each time, the next entry's ID is past the one that left.
+     */
+    @Test
+    fun anEntryIdIsNeverGivenTwiceAfterDataFromBeforeTheCounter() {
+        val leaving: List<(Playlists, PlaylistEntry) -> Unit> = listOf(
+            { playlists, entry -> playlists.remove(1, entry.id, entry.songId) },
+            { playlists, entry -> playlists.forget(entry.songId) },
+            { playlists, entry -> playlists.matchWith(songs + (entry.songId to song(entry.songId, durationMs = 95_000))) },
+        )
+        for (leave in leaving) {
+            file.values.clear()
+            val first = entry(2)
+            val newest = entry(4)
+            saved(1, "Road trip", first, newest)
+            val playlists = playlists()
+            playlists.loaded()
+            leave(playlists, newest)
+            assertEquals(listOf(2L), playlists.entriesOf(1).map { it.songId })
+            val again = playlists()
+            again.added(1, 3)
+            assertTrue(again.entriesOf(1).last().id > newest.id)
+        }
+    }
+
+    /** E.g. on a song's actions Gusle was restored with, before the playlists are read. */
+    @Test
+    fun anEntryTakenOutBeforeTheReadIsGoneOnceRead() {
+        val two = entry(2)
+        val three = entry(3)
+        saved(1, "Road trip", two, three)
+        val playlists = playlists()
+        playlists.remove(1, two.id, 2)
+        assertEquals(listOf(three), playlists.loaded().single().entries)
+        assertEquals(listOf(three), playlists().loaded().single().entries)
+    }
+
+    /** E.g. entries written before Gusle kept the counter: new ones come after them. */
+    @Test
+    fun newEntryIdsComeAfterTheOnesRead() {
+        val entries = arrayOf(entry(1), entry(2))
+        saved(1, "Road trip", *entries)
+        val playlists = playlists()
+        playlists.added(1, 3)
+        assertEquals(entries.last().id + 1, playlists.entriesOf(1).last().id)
+    }
+
+    @Test
+    fun aSongIsInAPlaylistAsOftenAsItWasAdded() {
+        saved(1, "Road trip", entry(2), entry(3), entry(2))
+        val playlist = playlists().loaded().single()
+        assertEquals(2, playlist.timesOf(songs.getValue(2)))
+        assertEquals(1, playlist.timesOf(songs.getValue(3)))
+        assertEquals(0, playlist.timesOf(songs.getValue(4)))
+        // Another song with song 2's ID isn't in it.
+        assertEquals(0, playlist.timesOf(song(2, durationMs = 95_000)))
     }
 
     @Test

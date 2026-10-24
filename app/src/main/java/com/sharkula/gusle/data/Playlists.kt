@@ -17,6 +17,12 @@ private const val PlaylistsPrefs = "playlists"
 private const val NextIdKey = "next_id"
 
 /**
+ * The ID the next entry gets, in any playlist: past every entry made so far, removed ones too, which
+ * the player's queue may still carry.
+ */
+private const val NextEntryIdKey = "next_entry_id"
+
+/**
  * A song in a playlist: the entry's own [id], which no other entry in any playlist ever has, and
  * which stays while entries around it come and go; the song's ID; and how long the song was when it
  * was added, which tells it from another song MediaStore gives its ID later (as a favorite's
@@ -45,6 +51,9 @@ data class Playlist(val id: Long, val name: String, val entries: List<PlaylistEn
     /** Its first song that's on the watch, [songsById], e.g. for its cover; null when there's none. */
     fun firstSongIn(songsById: Map<Long, Song>): Song? = entries.firstNotNullOfOrNull { songOf(it, songsById) }
 
+    /** How often [song] is in it: 0 when it isn't. */
+    fun timesOf(song: Song): Int = entries.count { it.songId == song.id && it.isOf(song) }
+
     private fun songOf(entry: PlaylistEntry, songsById: Map<Long, Song>): Song? =
         songsById[entry.songId]?.takeIf(entry::isOf)
 }
@@ -70,9 +79,13 @@ class Playlists internal constructor(openPrefs: () -> SharedPreferences) {
     // file, so nothing waits for the disk on the main thread later.
     private val reading = MainScope().async(Dispatchers.IO) { read() }
     private var nextId = 1L
+    private var nextEntryId = 1L
 
-    /** Songs deleted from the watch before the disk was read: they leave the playlists once it is. */
-    private val forgottenBeforeRead = HashSet<Long>()
+    /**
+     * Changes asked for before the disk was read, e.g. a song deleted from the watch, or taken out of
+     * a playlist on a screen Gusle was restored with: made once it's read.
+     */
+    private val changesBeforeRead = ArrayList<(Playlist) -> Playlist>()
 
     private val playlists = MutableStateFlow<List<Playlist>?>(null)
 
@@ -87,23 +100,31 @@ class Playlists internal constructor(openPrefs: () -> SharedPreferences) {
         // Unless another load was first.
         playlists.value?.let { return it }
         nextId = read.nextId
+        nextEntryId = read.nextEntryId
+        // Kept from now on, also when the entry with the highest ID leaves: from data saved before
+        // the counter, it was worked out from that entry.
+        if (!read.nextEntryIdSaved) prefs.edit { putLong(NextEntryIdKey, nextEntryId) }
         playlists.value = read.playlists
-        if (forgottenBeforeRead.isNotEmpty()) {
-            val forgotten = forgottenBeforeRead.toSet()
-            forgottenBeforeRead.clear()
-            change { playlist -> playlist.copy(entries = playlist.entries.filter { it.songId !in forgotten }) }
+        if (changesBeforeRead.isNotEmpty()) {
+            val changes = changesBeforeRead.toList()
+            changesBeforeRead.clear()
+            change { playlist -> changes.fold(playlist) { changed, next -> next(changed) } }
         }
         return playlists.value.orEmpty()
     }
 
-    /** Makes a new, empty playlist called [name], after the others; returns its ID. */
+    /**
+     * Makes a new playlist called [name], after the others, with [song] in it, or empty when that's
+     * null; returns its ID.
+     */
     @MainThread
-    suspend fun create(name: String): Long {
+    suspend fun create(name: String, song: Song? = null): Long {
         val before = load()
-        val playlist = Playlist(nextId++, name, emptyList())
+        val playlist = Playlist(nextId++, name, listOfNotNull(song?.let(::newEntry)))
         // Written in the background (apply, not commit).
         prefs.edit {
             putLong(NextIdKey, nextId)
+            putLong(NextEntryIdKey, nextEntryId)
             write(playlist)
         }
         playlists.value = before + playlist
@@ -111,16 +132,45 @@ class Playlists internal constructor(openPrefs: () -> SharedPreferences) {
     }
 
     /**
+     * Adds [song] at the end of the playlist with [playlistId], again if it's there already; returns
+     * whether it did, i.e. the playlist is there.
+     */
+    @MainThread
+    suspend fun add(playlistId: Long, song: Song): Boolean {
+        val before = load()
+        val at = before.indexOfFirst { it.id == playlistId }
+        if (at < 0) return false
+        val playlist = before[at].let { it.copy(entries = it.entries + newEntry(song)) }
+        prefs.edit {
+            putLong(NextEntryIdKey, nextEntryId)
+            write(playlist)
+        }
+        playlists.value = before.toMutableList().apply { set(at, playlist) }
+        return true
+    }
+
+    /**
+     * Takes the entry with [entryId] out of the playlist with [playlistId], if it's there and still
+     * the song with [songId]: e.g. the second of a song that's there twice, while the first stays.
+     */
+    @MainThread
+    fun remove(playlistId: Long, entryId: Long, songId: Long) {
+        changeOnceRead { playlist ->
+            if (playlist.id != playlistId) return@changeOnceRead playlist
+            playlist.copy(entries = playlist.entries.filterNot { it.id == entryId && it.songId == songId })
+        }
+    }
+
+    /** [song] as an entry of its own, with an ID no entry has had. */
+    private fun newEntry(song: Song) = PlaylistEntry(nextEntryId++, song.id, song.durationMs)
+
+    /**
      * The song with [songId] was deleted from the watch: it leaves every playlist, whatever song it
      * was added as, since MediaStore may give its ID to a file added later.
      */
     @MainThread
     fun forget(songId: Long) {
-        if (playlists.value == null) {
-            forgottenBeforeRead += songId
-            return
-        }
-        change { playlist -> playlist.copy(entries = playlist.entries.filter { it.songId != songId }) }
+        changeOnceRead { playlist -> playlist.copy(entries = playlist.entries.filter { it.songId != songId }) }
     }
 
     /**
@@ -145,6 +195,11 @@ class Playlists internal constructor(openPrefs: () -> SharedPreferences) {
         playlists.value = after
     }
 
+    /** [change]s every playlist, or once they're read, if they aren't yet. */
+    private fun changeOnceRead(changed: (Playlist) -> Playlist) {
+        if (playlists.value == null) changesBeforeRead += changed else change(changed)
+    }
+
     /**
      * One entry per playlist, by its ID: its entries, each its own ID, the song's ID and length, then
      * a line break and its name ("1,1792,211000,2,1795,183500\nRoad trip"). A name may hold anything,
@@ -155,7 +210,8 @@ class Playlists internal constructor(openPrefs: () -> SharedPreferences) {
         putString(playlist.id.toString(), entries + "\n" + playlist.name)
     }
 
-    private class Read(val playlists: List<Playlist>, val nextId: Long)
+    /** What's on disk; [nextEntryIdSaved] false when the entry counter there isn't [nextEntryId]. */
+    private class Read(val playlists: List<Playlist>, val nextId: Long, val nextEntryId: Long, val nextEntryIdSaved: Boolean)
 
     /**
      * What [write] wrote. Anything else, e.g. damaged, is left out: a playlist, or just an entry of
@@ -171,7 +227,14 @@ class Playlists internal constructor(openPrefs: () -> SharedPreferences) {
             Playlist(id, text.substringAfter('\n'), readEntries(text.substringBefore('\n')))
         }.sortedBy { it.id }.map { playlist -> playlist.copy(entries = playlist.entries.filter { seen.add(it.id) }) }
         val pastLast = (playlists.maxOfOrNull { it.id } ?: 0) + 1
-        return Read(playlists, maxOf(all[NextIdKey] as? Long ?: 1, pastLast))
+        val savedNextEntryId = all[NextEntryIdKey] as? Long
+        val nextEntryId = maxOf(savedNextEntryId ?: 1, (seen.maxOrNull() ?: 0) + 1)
+        return Read(
+            playlists,
+            maxOf(all[NextIdKey] as? Long ?: 1, pastLast),
+            nextEntryId,
+            nextEntryIdSaved = savedNextEntryId == nextEntryId,
+        )
     }
 
     private fun readEntries(entries: String): List<PlaylistEntry> {

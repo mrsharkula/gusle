@@ -4,7 +4,6 @@ import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +28,7 @@ import androidx.navigation3.ui.NavDisplay
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import com.sharkula.gusle.R
+import com.sharkula.gusle.announcer
 import com.sharkula.gusle.data.FavoriteSongs
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
@@ -41,6 +41,8 @@ import com.sharkula.gusle.themeChoice
 import com.sharkula.gusle.ui.albums.AlbumsScreen
 import com.sharkula.gusle.ui.artists.ArtistsScreen
 import com.sharkula.gusle.ui.components.MessageScreen
+import com.sharkula.gusle.ui.components.keptWhile
+import com.sharkula.gusle.ui.components.lastNotNull
 import com.sharkula.gusle.ui.covers.SongCover
 import com.sharkula.gusle.ui.covers.playingSongColors
 import com.sharkula.gusle.ui.favorites.rememberFavorites
@@ -51,6 +53,7 @@ import com.sharkula.gusle.ui.nowplaying.SeekScreen
 import com.sharkula.gusle.ui.playback.playFrom
 import com.sharkula.gusle.ui.playback.rememberPlayerConnection
 import com.sharkula.gusle.ui.playback.shuffleAll
+import com.sharkula.gusle.ui.playlists.AddToPlaylistScreen
 import com.sharkula.gusle.ui.playlists.PlaylistsScreen
 import com.sharkula.gusle.ui.playlists.rememberPlaylistNaming
 import com.sharkula.gusle.ui.playlists.rememberPlaylists
@@ -125,6 +128,16 @@ sealed interface Screen : NavKey {
     @Serializable
     data class SongActions(val songId: Long, val place: SongPlace = SongPlace.Library) : Screen
 
+    /**
+     * The playlists the song with [songId] can be added to, opened from its actions, which were
+     * opened at [place]: it goes back there once the song is in.
+     */
+    @Serializable
+    data class AddToPlaylist(val songId: Long, val place: SongPlace) : Screen {
+        /** The song's actions it was opened from. */
+        val actions: SongActions get() = SongActions(songId, place)
+    }
+
     @Serializable
     data object Settings : Screen
 
@@ -155,8 +168,8 @@ sealed interface SongPlace {
 
     /**
      * The entry with [entryId] ([com.sharkula.gusle.data.PlaylistEntry.id]) of the playlist with
-     * [playlistId], where a song can be twice too. Nothing reads it yet; an action that will must
-     * check the playlist still has the entry, as it may have changed.
+     * [playlistId], where a song can be twice too: Remove from this playlist takes out that one, if
+     * the playlist still has it.
      */
     @Serializable
     data class InPlaylist(val playlistId: Long, val entryId: Long) : SongPlace
@@ -238,9 +251,9 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
     }
     // An artist or album whose songs are all gone when they're read anew closes, wherever it is in
     // the stack, rather than showing no songs; so does one the stack was saved with, a song's
-    // actions once the song is gone, and a playlist once it's deleted (as soon as the playlists are
-    // read, for one the stack was saved with). Followed here rather than read as state, so a change
-    // doesn't compose the navigation again.
+    // actions and the playlists to add it to once the song is gone, and a playlist once it's deleted
+    // (as soon as the playlists are read, for one the stack was saved with). Followed here rather
+    // than read as state, so a change doesn't compose the navigation again.
     val playlistStore = LocalContext.current.playlists
     LaunchedEffect(songs, playlistStore) {
         playlistStore.all.collect { playlists ->
@@ -249,12 +262,20 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                     is Screen.Artist -> screen.key !in songs.artistsByKey
                     is Screen.Album -> screen.key !in songs.albumsByKey
                     is Screen.SongActions -> screen.songId !in songs.byId
+                    is Screen.AddToPlaylist -> screen.songId !in songs.byId
                     is Screen.Playlist -> playlists != null && playlists.none { it.id == screen.id }
                     else -> false
                 }
             }
         }
     }
+    // "Added to “Road trip”" over a song's actions, once the playlists opened from there have added
+    // the song and closed: the actions it shows on, and the playlist's name; null once it has had its
+    // moment. Kept here, as those playlists are gone by then.
+    var addedToPlaylist by remember { mutableStateOf<Pair<Screen.SongActions, String>?>(null) }
+    // For what outlives a screen that started it, e.g. a playlist being made as its list closes.
+    val scope = rememberCoroutineScope()
+    val announcer = LocalContext.current.announcer
     val player = rememberPlayerConnection()
 
     /** Starts playing (connecting first if needed), and opens Now playing on it. */
@@ -268,10 +289,12 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
     /**
      * Opens the actions of a [song] that was held, at [place], on top of the screen it was held on.
      * The same ones lower down go, rather than closing the screens above them to go back there:
-     * e.g. Now playing, opened from the watch's media controls over the actions of its song.
+     * e.g. Now playing, opened from the watch's media controls over the actions of its song. They
+     * open without an "Added to …" left from before, e.g. one whose actions closed as it showed.
      */
     fun songActions(song: Song, place: SongPlace = SongPlace.Library) {
         val screen = Screen.SongActions(song.id, place)
+        if (addedToPlaylist?.first == screen) addedToPlaylist = null
         backStack.remove(screen)
         go(screen)
     }
@@ -456,7 +479,6 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                     val place = rememberPlayerPlace()
                     // Nothing for the moment until they're read, rather than "No playlists yet".
                     val playlists = rememberPlaylists() ?: return@PlayingSongTheme
-                    val scope = rememberCoroutineScope()
                     // A new playlist opens, empty, once it's named.
                     val naming = rememberPlaylistNaming { name ->
                         scope.launch(start = CoroutineStart.UNDISPATCHED) { go(Screen.Playlist(playlistStore.create(name))) }
@@ -543,6 +565,8 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                 val deletion = rememberSongDeletion(screen.songId)
                 val song = lastNotNull(songs.byId[screen.songId]) ?: return@entry
                 val deleted = deletion.step == DeletionStep.Deleted
+                val inPlaylist = screen.place as? SongPlace.InPlaylist
+                val removed = stringResource(R.string.removed_from_playlist)
                 PlayingSongTheme(songs) { _, _ ->
                     MaterialTheme(colorScheme = keptWhile(deleted, MaterialTheme.colorScheme)) {
                         val favorites = rememberFavorites()
@@ -551,10 +575,78 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                             song,
                             isFavorite = keptWhile(deleted, song in favorites),
                             onFavorite = if (deleted) null else { favorite -> setFavorite(song, favorite) },
+                            onAddToPlaylist = { if (!deleted) go(Screen.AddToPlaylist(song.id, screen.place)) },
+                            // That one entry, and back to the playlist, as after Delete, which screen
+                            // readers hear too. The player's queue keeps its songs: the playlist is
+                            // the list, not the queue.
+                            onRemoveFromPlaylist = inPlaylist?.let { place ->
+                                {
+                                    if (!deleted && backStack.remove(screen)) {
+                                        slidingIn = null
+                                        playlistStore.remove(place.playlistId, place.entryId, song.id)
+                                        announcer.say(removed)
+                                    }
+                                }
+                            },
                             deletion = deletion,
+                            addedTo = addedToPlaylist?.takeIf { it.first == screen }?.second,
+                            onAddedShown = { if (addedToPlaylist?.first == screen) addedToPlaylist = null },
                             onTop = backStack.lastOrNull() == screen,
                         )
                     }
+                }
+            }
+            // Over the actions it was opened from, in their colors. A tap on a playlist adds the song
+            // (again, if it's there), and New playlist names one with the song in it; either way the
+            // list closes, back to the actions, which say where it went. Once the song is gone it
+            // closes too (see above).
+            entry<Screen.AddToPlaylist>(metadata = { slidesIn(it) }) { screen ->
+                /**
+                 * The song is in the playlist called [name] now: the list closes, back to the song's
+                 * actions, which say so. Only while it's on top: under another screen, e.g. Now playing
+                 * opened from the watch's media controls while a name was typed, it stays, showing the
+                 * song in that playlist.
+                 */
+                fun added(name: String) {
+                    if (backStack.lastOrNull() != screen) return
+                    backStack.removeAt(backStack.lastIndex)
+                    slidingIn = null
+                    // Back to the actions it came from, also when they moved meanwhile: e.g. the song
+                    // held on Now playing opened over this list, which closed again since.
+                    if (backStack.lastOrNull() != screen.actions) {
+                        backStack.remove(screen.actions)
+                        backStack.add(screen.actions)
+                    }
+                    addedToPlaylist = screen.actions to name
+                }
+                // First, so a name still arrives when Gusle is restored before the songs or playlists
+                // are there again. The playlist is made even if the list closes meanwhile: it was
+                // named.
+                val naming = rememberPlaylistNaming { name ->
+                    val song = songs.byId[screen.songId] ?: return@rememberPlaylistNaming
+                    scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                        playlistStore.create(name, song)
+                        added(name)
+                    }
+                }
+                val song = lastNotNull(songs.byId[screen.songId]) ?: return@entry
+                PlayingSongTheme(songs) { _, _ ->
+                    // Nothing for the moment until they're read.
+                    val playlists = rememberPlaylists() ?: return@PlayingSongTheme
+                    AddToPlaylistScreen(
+                        song,
+                        playlists,
+                        songs.byId,
+                        onPlaylist = { playlist ->
+                            // Not again for a second tap as the list closes.
+                            if (backStack.lastOrNull() == screen) {
+                                scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                                    if (playlistStore.add(playlist.id, song)) added(playlist.name)
+                                }
+                            }
+                        },
+                        onNewPlaylist = naming::ask,
+                    )
                 }
             }
             // In the playing song's colors too, so opening them from Home doesn't change the colors.
@@ -589,23 +681,6 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
         },
     )
 }
-
-/**
- * [value], or while it's null, the last value it had that wasn't: e.g. an artist whose songs are all
- * gone, until their screen has closed.
- */
-@Composable
-private fun <T : Any> lastNotNull(value: T?): T? = keptWhile(held = value == null, value)
-
-/** [value], or while [held], the last value it had before. */
-@Composable
-private fun <T> keptWhile(held: Boolean, value: T): T {
-    val kept = remember { Kept(value) }
-    SideEffect { if (!held) kept.value = value }
-    return if (held) kept.value else value
-}
-
-private class Kept<T>(var value: T)
 
 /**
  * A screen in the colors of the player's song's cover, without connecting to the player.

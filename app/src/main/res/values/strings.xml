@@ -28,6 +28,14 @@
     <string name="no_playlists_title">No playlists yet</string>
     <!-- Under "No playlists yet", and in a playlist with no songs. -->
     <string name="add_to_playlist_hint">Hold a song and choose Add to playlist.</string>
+    <!-- The button on a song's actions, and the title of the list of playlists it opens. -->
+    <string name="add_to_playlist">Add to playlist</string>
+    <!-- On a song's actions, when it was held inside a playlist: takes that one entry out. -->
+    <string name="remove_from_playlist">Remove from this playlist</string>
+    <!-- Shown for a moment once a song is added to a playlist, e.g. "Added to “Road trip”". -->
+    <string name="added_to_playlist">Added to “%1$s”</string>
+    <!-- Said to screen readers once a song is taken out of a playlist and its actions have closed. -->
+    <string name="removed_from_playlist">Removed</string>
     <string name="albums">Albums</string>
     <string name="artists">Artists</string>
     <!-- Stands for the artist of the songs without one: in Artists, and as their songs' title. -->
@@ -119,6 +127,12 @@
     <plurals name="playlist_count">
         <item quantity="one">%d playlist</item>
         <item quantity="other">%d playlists</item>
+    </plurals>
+    <!-- Under a playlist in the list Add to playlist opens, when the song is in it already: its song
+         count (song_count), and how often the song is there, e.g. "5 songs · in it 2 times". -->
+    <plurals name="song_count_in_it">
+        <item quantity="one">%2$s · in it already</item>
+        <item quantity="other">%2$s · in it %1$d times</item>
     </plurals>
     <!-- Lengths in words, for screen readers: e.g. "1 hour 2 minutes 5 seconds". -->
     <plurals name="hours">
