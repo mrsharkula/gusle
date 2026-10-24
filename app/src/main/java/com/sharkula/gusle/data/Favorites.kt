@@ -21,17 +21,23 @@ private const val FavoritesPrefs = "favorites"
 private const val SameLengthMs = 1_000L
 
 /**
+ * Whether two lengths (ms) are the same song's, for a song with an ID that MediaStore may have
+ * given another song since: the favorites and the playlists tell them apart this way.
+ */
+internal fun isSameLength(aMs: Long, bMs: Long): Boolean = abs(aMs - bMs) <= SameLengthMs
+
+/**
  * A song marked as a favorite: when (its order among them, see [Favorites]), and how long the song
  * was then, which tells it from another song MediaStore gives its ID later ([durationMs] null:
  * not known, as an earlier build kept it).
  */
 data class Favorite(val addedAtMs: Long, val durationMs: Long?) {
     /** Whether [song], with the favorite's ID, is the song it was marked on. */
-    fun isOf(song: Song): Boolean = durationMs == null || abs(song.durationMs - durationMs) <= SameLengthMs
+    fun isOf(song: Song): Boolean = durationMs == null || isSameLength(song.durationMs, durationMs)
 
     /** Whether [other], for the same ID, was marked on the same song. */
     internal fun isSameSongAs(other: Favorite): Boolean =
-        durationMs == null || other.durationMs == null || abs(durationMs - other.durationMs) <= SameLengthMs
+        durationMs == null || other.durationMs == null || isSameLength(durationMs, other.durationMs)
 }
 
 /** The favorite songs by [Song.id]. Equal when they hold the same. */

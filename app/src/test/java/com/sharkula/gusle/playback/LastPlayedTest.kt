@@ -51,6 +51,47 @@ class LastPlayedTest {
         assertEquals(queue.copy(source = QueueSource.Artist("sabaton")), lastPlayed().loaded())
     }
 
+    /** A playlist can have a song twice: it comes back on the one it was on, not the first. */
+    @Test
+    fun comesBackOnTheSameOneOfASongThatsThereTwice() {
+        val playlist = SavedQueue(listOf(10L, 20L, 10L, 30L), null, current = 2, positionMs = 5_000, QueueSource.Playlist(1, "Road trip"))
+        val lastPlayed = lastPlayed()
+        lastPlayed.save(playlist)
+        assertEquals(playlist, lastPlayed().loaded())
+        // On to the first one: only where it is changes, but that's written too.
+        lastPlayed.save(playlist.copy(current = 0))
+        assertEquals(playlist.copy(current = 0), lastPlayed().loaded())
+    }
+
+    /** From a playlist, each song comes back as the entry it was, also after only some are left. */
+    @Test
+    fun comesBackWithThePlaylistsEntries() {
+        val playlist = SavedQueue(
+            listOf(10L, 20L, 10L),
+            listOf(2, 0, 1),
+            current = 2,
+            positionMs = 5_000,
+            QueueSource.Playlist(1, "Road trip"),
+            entryIds = listOf(7L, 8L, 9L),
+        )
+        lastPlayed().save(playlist)
+        assertEquals(playlist, lastPlayed().loaded())
+        val left = runBlocking { lastPlayed().apply { forgetSong(20) }.loaded() }
+        assertEquals(listOf(7L, 9L), left?.entryIds)
+        assertEquals(listOf(7L, 9L), lastPlayed().loaded()?.entryIds)
+        // From elsewhere: none.
+        lastPlayed().save(queue)
+        assertNull(lastPlayed().loaded()?.entryIds)
+    }
+
+    /** As the builds before playlists saved it, without which of its items it was on: the first. */
+    @Test
+    fun aSongThereTwiceSavedWithoutWhereItIsIsTheFirst() {
+        lastPlayed().save(SavedQueue(listOf(10L, 20L, 10L), null, current = 2, positionMs = 5_000))
+        files.getValue("last_played_position").values.remove("index")
+        assertEquals(SavedQueue(listOf(10L, 20L, 10L), null, current = 0, positionMs = 5_000), lastPlayed().loaded())
+    }
+
     @Test
     fun hasNothingBeforeAnythingIsSaved() {
         assertNull(lastPlayed().loaded())

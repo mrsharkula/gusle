@@ -1,6 +1,7 @@
 package com.sharkula.gusle.ui.covers
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -20,10 +21,15 @@ import com.sharkula.gusle.ui.components.RowCircleSize
 
 /**
  * A song's [cover] in a list row's circle, center-cropped, so a 16:9 cover shows its middle. The
- * [noCover] painter stands in while it loads and when there's none.
+ * [noCover] painter stands in while it loads and when there's none, and for a row with no song
+ * (null), e.g. an empty playlist's.
  */
 @Composable
-fun SongCoverCircle(cover: SongCover, noCover: Painter, modifier: Modifier = Modifier) {
+fun SongCoverCircle(cover: SongCover?, noCover: Painter, modifier: Modifier = Modifier) {
+    if (cover == null) {
+        Image(noCover, contentDescription = null, modifier = modifier.size(RowCircleSize).clip(CircleShape))
+        return
+    }
     AsyncImage(
         model = cover,
         contentDescription = null,

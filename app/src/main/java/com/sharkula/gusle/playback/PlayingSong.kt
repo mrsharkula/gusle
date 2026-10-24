@@ -19,6 +19,13 @@ import kotlinx.coroutines.launch
 data class PlayingSong(val songId: Long, val isPlaying: Boolean)
 
 /**
+ * Where the player is: where its queue came from ([source]), and from a playlist, which of the
+ * playlist's entries it's on ([entryId], [com.sharkula.gusle.data.PlaylistEntry.id]), since a song
+ * can be there twice; null when the queue isn't from a playlist.
+ */
+data class PlayerPlace(val source: QueueSource, val entryId: Long?)
+
+/**
  * What the tile and the always-on display show of a player: its song, whether it plays, where it
  * is, and how long it is if it knows.
  */
@@ -42,7 +49,8 @@ val Player.knownDurationMs: Long? get() = duration.takeIf { it != C.TIME_UNSET }
  * the service: connecting would start it. Without one, it's the song the player had last
  * ([LastPlayed]), paused: the service comes back to it when it starts. The app keeps one; only the
  * service changes it, apart from Stop playing forgetting a saved song ([forgetIfOnlySaved]) and a
- * song deleted from the watch ([forgetDeleted]).
+ * song deleted from the watch ([forgetDeleted]). Where the player is ([place]) is kept apart, for
+ * the few screens that show it, so the others don't follow every move of the player.
  * [onChange] runs whenever the song or whether it plays changes, though not as the saved one is
  * first read: the tile follows it.
  */
@@ -53,12 +61,16 @@ class PlayingSongHolder(
 ) {
     private val scope = MainScope()
     private val playing = MutableStateFlow<PlayingSong?>(null)
+    private val where = MutableStateFlow<PlayerPlace?>(null)
 
     /** How the running service drops a deleted song from its player's queue; null while it's stopped. */
     private var dropFromPlayer: ((songId: Long) -> Unit)? = null
 
     /** The player's song while the service is running and its player has one. */
     private var fromPlayer: PlayingSong? = null
+
+    /** Where the player is, while [fromPlayer] comes from it. */
+    private var placeFromPlayer: PlayerPlace? = null
 
     /** The service's player while [fromPlayer] comes from it, for where it is in its song. */
     private var player: Player? = null
@@ -71,6 +83,9 @@ class PlayingSongHolder(
 
     /** Null while there's none, e.g. before anything has played. */
     val song: StateFlow<PlayingSong?> = playing.asStateFlow()
+
+    /** Where the player is, with its [song]; null while there's none. */
+    val place: StateFlow<PlayerPlace?> = where.asStateFlow()
 
     private val foreground = MutableStateFlow(false)
 
@@ -99,9 +114,11 @@ class PlayingSongHolder(
         dropFromPlayer = dropSong
     }
 
-    /** Takes the song [player] has now, and whether it plays on ([playsOn]). */
+    /** Takes the song [player] has now, whether it plays on ([playsOn]), and where it is. */
     fun update(player: Player) {
-        fromPlayer = player.currentMediaItem?.songId?.let { songId -> PlayingSong(songId, isPlaying = player.playsOn) }
+        val item = player.currentMediaItem
+        fromPlayer = item?.songId?.let { songId -> PlayingSong(songId, isPlaying = player.playsOn) }
+        placeFromPlayer = item?.let { PlayerPlace(player.queueSource, it.entryId) }
         this.player = player.takeIf { fromPlayer != null }
         show()
     }
@@ -165,6 +182,7 @@ class PlayingSongHolder(
     /** The service stopped; it has saved its song. */
     fun serviceStopped() {
         fromPlayer = null
+        placeFromPlayer = null
         player = null
         dropFromPlayer = null
         foreground.value = false
@@ -182,6 +200,11 @@ class PlayingSongHolder(
         }
         val song = fromPlayer ?: savedLeft?.let { PlayingSong(it.currentSongId, isPlaying = false) }
         val changed = song != playing.value
+        where.value = if (fromPlayer != null) {
+            placeFromPlayer
+        } else {
+            savedLeft?.let { PlayerPlace(it.source, it.entryIds?.get(it.current)) }
+        }
         playing.value = song
         if (changed && shown) onChange()
         shown = true

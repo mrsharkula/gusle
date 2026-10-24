@@ -11,7 +11,7 @@ import kotlinx.coroutines.async
 /**
  * A queue as the player had it: its songs by [com.sharkula.gusle.data.Song.id] in the player's
  * order (e.g. A–Z), the order they play in while shuffled, where it was, and where its songs came
- * from.
+ * from; from a playlist, also the entry each of them is.
  */
 data class SavedQueue(
     val songIds: List<Long>,
@@ -22,12 +22,18 @@ data class SavedQueue(
     val positionMs: Long,
     /** Where the songs came from; All songs in a queue saved before Gusle kept it. */
     val source: QueueSource = QueueSource.AllSongs,
+    /**
+     * From a playlist, the entry each of [songIds] is ([com.sharkula.gusle.data.PlaylistEntry.id]);
+     * null otherwise, and in a queue saved before Gusle kept them.
+     */
+    val entryIds: List<Long>? = null,
 ) {
     val currentSongId: Long get() = songIds[current]
 
-    /** Whether [other] has the same songs, orders and source: all but where it is. */
+    /** Whether [other] has the same songs, orders, source and entries: all but where it is. */
     fun sameSongsAs(other: SavedQueue): Boolean =
-        songIds == other.songIds && shuffleOrder == other.shuffleOrder && source == other.source
+        songIds == other.songIds && shuffleOrder == other.shuffleOrder && source == other.source &&
+            entryIds == other.entryIds
 
     /**
      * This queue with only the songs [isThere] (still on the watch), in the same orders, or null if
@@ -54,6 +60,7 @@ data class SavedQueue(
             current = newCurrent,
             positionMs = if (stays) positionMs else 0,
             source = source,
+            entryIds = entryIds?.filterIndexed { i, _ -> newIndex[i] >= 0 },
         )
     }
 
@@ -62,7 +69,9 @@ data class SavedQueue(
          * The queue stored as [songIds] and [shuffleOrder] (numbers joined by [joinedNumbers]), on
          * [currentSongId] at [positionMs], from [source], or null if it doesn't hold together, e.g.
          * when a file is damaged. A song that isn't in the queue (the two were stored separately)
-         * starts it over.
+         * starts it over. A song that's there twice, as a playlist may have it, is the one at
+         * [currentIndex] if that's the song; otherwise, e.g. from a build that didn't store it (-1),
+         * the first. A playlist's [entryIds] that don't fit the songs are left out.
          */
         fun of(
             songIds: String?,
@@ -70,17 +79,20 @@ data class SavedQueue(
             currentSongId: Long,
             positionMs: Long,
             source: QueueSource = QueueSource.AllSongs,
+            currentIndex: Int = -1,
+            entryIds: String? = null,
         ): SavedQueue? {
             val ids = songIds?.splitNumbers(String::toLongOrNull) ?: return null
+            val entries = entryIds?.splitNumbers(String::toLongOrNull)?.takeIf { it.size == ids.size }
             val order = shuffleOrder?.let { it.splitNumbers(String::toIntOrNull) ?: return null }
             if (ids.isEmpty() || positionMs < 0 || (order != null && order.sorted() != ids.indices.toList())) {
                 return null
             }
-            val current = ids.indexOf(currentSongId)
+            val current = currentIndex.takeIf { ids.getOrNull(it) == currentSongId } ?: ids.indexOf(currentSongId)
             return if (current >= 0) {
-                SavedQueue(ids, order, current, positionMs, source)
+                SavedQueue(ids, order, current, positionMs, source, entries)
             } else {
-                SavedQueue(ids, order, current = order?.first() ?: 0, positionMs = 0, source)
+                SavedQueue(ids, order, current = order?.first() ?: 0, positionMs = 0, source, entries)
             }
         }
     }
@@ -98,7 +110,9 @@ private const val PositionPrefs = "last_played_position"
 private const val SongIdsKey = "song_ids"
 private const val ShuffleOrderKey = "shuffle_order"
 private const val SourceKey = "source"
+private const val EntryIdsKey = "entry_ids"
 private const val SongIdKey = "song_id"
+private const val IndexKey = "index"
 private const val PositionKey = "position_ms"
 
 /**
@@ -139,8 +153,8 @@ class LastPlayed internal constructor(openPrefs: (name: String) -> SharedPrefere
     }
 
     /**
-     * Keeps [queue], writing only what changed: its songs, their order and where they came from, or
-     * where it is.
+     * Keeps [queue], writing only what changed: its songs, their order, where they came from and
+     * their playlist entries, or where it is.
      */
     @MainThread
     fun save(queue: SavedQueue) {
@@ -154,11 +168,17 @@ class LastPlayed internal constructor(openPrefs: (name: String) -> SharedPrefere
                 putString(ShuffleOrderKey, queue.shuffleOrder?.joinedNumbers())
                 // Null, for All songs, removes it.
                 putString(SourceKey, queue.source.encoded)
+                // Null, for a queue not from a playlist, removes it.
+                putString(EntryIdsKey, queue.entryIds?.joinedNumbers())
             }
         }
-        if (last == null || queue.currentSongId != last.currentSongId || queue.positionMs != last.positionMs) {
+        if (last == null || queue.current != last.current || queue.currentSongId != last.currentSongId ||
+            queue.positionMs != last.positionMs
+        ) {
             positionPrefs.edit {
                 putLong(SongIdKey, queue.currentSongId)
+                // Which of its items the song is: a playlist can have it twice.
+                putInt(IndexKey, queue.current)
                 putLong(PositionKey, queue.positionMs)
             }
         }
@@ -196,6 +216,8 @@ class LastPlayed internal constructor(openPrefs: (name: String) -> SharedPrefere
                 currentSongId = positionPrefs.getLong(SongIdKey, -1),
                 positionMs = positionPrefs.getLong(PositionKey, 0),
                 source = QueueSource.decode(queuePrefs.getString(SourceKey, null)),
+                currentIndex = positionPrefs.getInt(IndexKey, -1),
+                entryIds = queuePrefs.getString(EntryIdsKey, null),
             )
         } catch (e: ClassCastException) {
             // A value of another type, e.g. from an earlier build: nothing to come back to, rather

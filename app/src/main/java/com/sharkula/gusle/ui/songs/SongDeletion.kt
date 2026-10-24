@@ -24,6 +24,7 @@ import androidx.core.content.edit
 import com.sharkula.gusle.R
 import com.sharkula.gusle.data.Favorites
 import com.sharkula.gusle.data.MusicLibrary
+import com.sharkula.gusle.data.Playlists
 import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.playback.PlayingSongHolder
 import com.sharkula.gusle.songDeleter
@@ -62,6 +63,7 @@ class SongDeleter(
     private val library: MusicLibrary,
     private val playing: PlayingSongHolder,
     private val favorites: () -> Favorites,
+    private val playlists: () -> Playlists,
     private val announcer: Announcer,
 ) {
     private val scope = MainScope()
@@ -85,9 +87,9 @@ class SongDeleter(
 
     /**
      * Finishes what a lost answer left undone, once the songs are read: if the song Android was last
-     * asked about is gone, it leaves the saved queue and the favorites, as after Allow, and is no
-     * longer noted. Run once as the app starts. An answer that does arrive, to a screen Gusle
-     * restored, is left to that screen ([AnswerGraceMs]). A song that's still there stays noted:
+     * asked about is gone, it leaves the saved queue, the favorites and the playlists, as after
+     * Allow, and is no longer noted. Run once as the app starts. An answer that does arrive, to a
+     * screen Gusle restored, is left to that screen ([AnswerGraceMs]). A song that's still there stays noted:
      * Android's screen may still be waiting for the user, and a later Allow could again go unheard.
      * The next song asked about replaces it.
      */
@@ -101,6 +103,7 @@ class SongDeleter(
         Log.i(Tag, "Song $songId was deleted, but Android's answer never arrived; forgetting it now")
         playing.forgetDeleted(songId)
         favorites().forget(songId)
+        playlists().forget(songId)
         answered(songId)
     }
 
@@ -109,7 +112,7 @@ class SongDeleter(
      * ([deletion]). It leaves the player's queue first, at once (or the saved one), so the player
      * has moved on before the songs are read again: then every screen shows it gone, and its
      * actions screen closes, back where it was held. Once its file is surely gone, it's no longer a
-     * favorite, and screen readers hear it's done. If the file is still there, the screen says it
+     * favorite nor in any playlist, and screen readers hear it's done. If the file is still there, the screen says it
      * couldn't be deleted; it has left the queue, though, as Android said it was gone.
      */
     fun deleted(songId: Long, deletion: SongDeletion) {
@@ -123,6 +126,7 @@ class SongDeleter(
                 couldntDelete(deletion, rescan = false)
             } else {
                 favorites().forget(songId)
+                playlists().forget(songId)
                 announcer.say(context.getString(R.string.deleted))
             }
             answered(songId)

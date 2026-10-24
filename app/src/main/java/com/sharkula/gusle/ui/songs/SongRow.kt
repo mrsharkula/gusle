@@ -77,7 +77,8 @@ private val FavoriteMarkGap = 3.dp
 
 /**
  * A row in a list with a song's [cover] in its circle: a song's own row ([SongRow]), or e.g. an
- * artist's, with one of their songs' covers. Its [label] and the [secondaryLabel] under it end with
+ * artist's, with one of their songs' covers; [noCover]'s icon when there's no song, e.g. for an
+ * empty playlist (null). Its [label] and the [secondaryLabel] under it end with
  * "…" when they don't fit; a favorite song's ([isFavorite]) has a small heart before the latter.
  * While [isPlaying] isn't null, the row is highlighted, with the equalizer at the end: for the
  * player's song, and for what it's from. [noCover] stands in for missing covers
@@ -86,7 +87,7 @@ private val FavoriteMarkGap = 3.dp
  */
 @Composable
 fun TransformingLazyColumnItemScope.CoverRow(
-    cover: SongCover,
+    cover: SongCover?,
     label: String,
     secondaryLabel: String?,
     isPlaying: Boolean?,

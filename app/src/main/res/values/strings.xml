@@ -21,6 +21,13 @@
     <string name="couldnt_delete">Couldn\'t delete</string>
     <string name="no_favorites_title">No favorites yet</string>
     <string name="no_favorites_text">Tap the heart on Now playing, or swipe a song left.</string>
+    <string name="playlists">Playlists</string>
+    <string name="new_playlist">New playlist</string>
+    <!-- The title of Wear's own text input, where a playlist's name is typed or said. -->
+    <string name="playlist_name">Playlist name</string>
+    <string name="no_playlists_title">No playlists yet</string>
+    <!-- Under "No playlists yet", and in a playlist with no songs. -->
+    <string name="add_to_playlist_hint">Hold a song and choose Add to playlist.</string>
     <string name="albums">Albums</string>
     <string name="artists">Artists</string>
     <!-- Stands for the artist of the songs without one: in Artists, and as their songs' title. -->
@@ -108,6 +115,10 @@
     <plurals name="album_count">
         <item quantity="one">%d album</item>
         <item quantity="other">%d albums</item>
+    </plurals>
+    <plurals name="playlist_count">
+        <item quantity="one">%d playlist</item>
+        <item quantity="other">%d playlists</item>
     </plurals>
     <!-- Lengths in words, for screen readers: e.g. "1 hour 2 minutes 5 seconds". -->
     <plurals name="hours">

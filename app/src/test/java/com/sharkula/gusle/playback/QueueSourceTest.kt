@@ -1,5 +1,6 @@
 package com.sharkula.gusle.playback
 
+import com.sharkula.gusle.data.Playlist
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -15,6 +16,10 @@ class QueueSourceTest {
             QueueSource.Album("three days grace\none-x"),
             QueueSource.Album(null),
             QueueSource.Favorites,
+            QueueSource.Playlist(7, "Road trip"),
+            // Whatever a playlist's name holds.
+            QueueSource.Playlist(12, "playlist:3: x\ny"),
+            QueueSource.Playlist(13, ""),
         )
         for (source in sources) {
             assertEquals(source, QueueSource.decode(source.encoded))
@@ -67,5 +72,37 @@ class QueueSourceTest {
         assertEquals(named, QueueSource.decode(named.encoded))
         assertEquals(none, QueueSource.decode(none.encoded))
         assertNotEquals(named.encoded, none.encoded)
+    }
+
+    /** An artist or album named like a playlist isn't one, nor a playlist named "favorites" the favorites. */
+    @Test
+    fun keepsPlaylistsApartFromWhatsNamedLikeThem() {
+        val playlist = QueueSource.Playlist(3, "favorites")
+        for (other in listOf(QueueSource.Artist("playlist:3:favorites"), QueueSource.Album("playlist:3\nfavorites"), QueueSource.Favorites)) {
+            assertNotEquals(playlist.encoded, other.encoded)
+            assertEquals(other, QueueSource.decode(other.encoded))
+        }
+        assertEquals(playlist, QueueSource.decode(playlist.encoded))
+    }
+
+    @Test
+    fun aDamagedPlaylistIsAllSongs() {
+        assertEquals(QueueSource.AllSongs, QueueSource.decode("playlist:"))
+        assertEquals(QueueSource.AllSongs, QueueSource.decode("playlist:road trip"))
+    }
+
+    /** E.g. once it's renamed. */
+    @Test
+    fun aPlaylistGoesByTheNameItHasNow() {
+        val playlists = listOf(Playlist(2, "Workout", emptyList()), Playlist(7, "Long road trip", emptyList()))
+        assertEquals("Long road trip", QueueSource.Playlist(7, "Road trip").nameAmong(playlists))
+    }
+
+    @Test
+    fun aDeletedPlaylistGoesByTheNameItHad() {
+        val playlists = listOf(Playlist(2, "Workout", emptyList()))
+        assertEquals("Road trip", QueueSource.Playlist(7, "Road trip").nameAmong(playlists))
+        // Nor are they read yet, as the playback service starts.
+        assertEquals("Road trip", QueueSource.Playlist(7, "Road trip").nameAmong(null))
     }
 }

@@ -208,24 +208,28 @@ private class LastShown {
 /**
  * Plays the song at [start] and then the [songs] after it, in their order (e.g. an artist's A–Z).
  * The songs above it stay in the queue, so Previous goes back to them. They go with where they came
- * from ([source]), which the Queue names.
+ * from ([source]), which the Queue names, and from a playlist, with the entry each of them is
+ * ([entryIds]).
  */
-fun Player.playFrom(songs: List<Song>, start: Int, source: QueueSource) {
+fun Player.playFrom(songs: List<Song>, start: Int, source: QueueSource, entryIds: List<Long>? = null) {
     shuffleModeEnabled = false
-    setMediaItems(songs.map { it.toMediaItemRequest() }.comingFrom(source), start, /* startPositionMs = */ 0)
+    setMediaItems(requests(songs, source, entryIds), start, /* startPositionMs = */ 0)
     prepare()
     play()
 }
 
 /**
  * Plays all [songs] in a new random order, starting at a random one. They go with where they came
- * from ([source]), as for [playFrom].
+ * from ([source]) and their [entryIds], as for [playFrom].
  */
-fun Player.shuffleAll(songs: List<Song>, source: QueueSource) {
+fun Player.shuffleAll(songs: List<Song>, source: QueueSource, entryIds: List<Long>? = null) {
     // Shuffle goes on first: then setting the songs draws a new random order, and playback starts
     // at its first song.
     shuffleModeEnabled = true
-    setMediaItems(songs.map { it.toMediaItemRequest() }.comingFrom(source), /* resetPosition = */ true)
+    setMediaItems(requests(songs, source, entryIds), /* resetPosition = */ true)
     prepare()
     play()
 }
+
+private fun requests(songs: List<Song>, source: QueueSource, entryIds: List<Long>?) =
+    songs.mapIndexed { i, song -> song.toMediaItemRequest(entryIds?.get(i)) }.comingFrom(source)

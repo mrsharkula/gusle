@@ -31,6 +31,7 @@ fun HomeScreen(
     artistCount: Int,
     albumCount: Int,
     favoriteCount: Int,
+    playlistCount: Int,
     /** The player's song, playing or paused, shown on top; null when there's none. */
     playing: Song?,
     isPlaying: Boolean,
@@ -44,6 +45,7 @@ fun HomeScreen(
     onArtists: () -> Unit,
     onAlbums: () -> Unit,
     onFavorites: () -> Unit,
+    onPlaylists: () -> Unit,
     onSettings: () -> Unit,
 ) {
     ListScreen(
@@ -103,13 +105,21 @@ fun HomeScreen(
                 transformationSpec = transformationSpec,
             )
         }
-        // Where Playlists will go, once there are playlists.
         item(key = "favorites") {
             SourceButton(
                 icon = R.drawable.ic_favorite,
                 label = stringResource(R.string.favorites),
                 count = pluralStringResource(R.plurals.song_count, favoriteCount, favoriteCount),
                 onClick = onFavorites,
+                transformationSpec = transformationSpec,
+            )
+        }
+        item(key = "playlists") {
+            SourceButton(
+                icon = R.drawable.ic_queue_music,
+                label = stringResource(R.string.playlists),
+                count = pluralStringResource(R.plurals.playlist_count, playlistCount, playlistCount),
+                onClick = onPlaylists,
                 transformationSpec = transformationSpec,
             )
         }
@@ -159,6 +169,7 @@ private fun HomeScreenPreview() {
             artistCount = 6,
             albumCount = 35,
             favoriteCount = 0,
+            playlistCount = 0,
             playing = null,
             isPlaying = false,
             playingIsFavorite = false,
@@ -168,6 +179,7 @@ private fun HomeScreenPreview() {
             onArtists = {},
             onAlbums = {},
             onFavorites = {},
+            onPlaylists = {},
             onSettings = {},
         )
     }
@@ -185,6 +197,7 @@ private fun HomeScreenPlayingPreview() {
             artistCount = 6,
             albumCount = 35,
             favoriteCount = 4,
+            playlistCount = 2,
             playing = previewSong,
             isPlaying = true,
             playingIsFavorite = true,
@@ -194,6 +207,7 @@ private fun HomeScreenPlayingPreview() {
             onArtists = {},
             onAlbums = {},
             onFavorites = {},
+            onPlaylists = {},
             onSettings = {},
         )
     }
@@ -209,6 +223,7 @@ private fun HomeScreenPlayingCoverPreview() {
             artistCount = 6,
             albumCount = 35,
             favoriteCount = 4,
+            playlistCount = 2,
             playing = previewSong,
             isPlaying = true,
             playingIsFavorite = true,
@@ -218,6 +233,7 @@ private fun HomeScreenPlayingCoverPreview() {
             onArtists = {},
             onAlbums = {},
             onFavorites = {},
+            onPlaylists = {},
             onSettings = {},
         )
     }

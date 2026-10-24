@@ -32,17 +32,20 @@ import com.sharkula.gusle.ui.favorites.rememberSwipeRows
 import com.sharkula.gusle.ui.theme.GusleTheme
 
 /**
- * A list of songs under its [title], with Shuffle all on top: All songs, an artist's songs, or the
- * favorites. The player's song is marked, and with [heartsShown], the [favorites]. Tapping a song
- * plays it and then the rest of the list, in its order; swiping it left adds it to the favorites, or
- * removes it ([onFavorite]); holding it opens its actions ([onSongActions]).
+ * A list of songs under its [title], with Shuffle all on top: All songs, an artist's songs, the
+ * favorites or a playlist. The player's row is marked, and with [heartsShown], the [favorites].
+ * Tapping a song plays it and then the rest of the list, in its order; swiping it left adds it to the
+ * favorites, or removes it ([onFavorite]); holding it opens its actions ([onSongActions]).
  */
 @Composable
 fun SongListScreen(
     title: String,
     songs: List<Song>,
-    /** The player's song, playing or paused; null when there's none. */
-    playing: Song?,
+    /**
+     * The player's row, playing or paused, by its [rowKey]: its song's, or in a list where a song
+     * can be twice (a playlist), the row it's on; null when there's none.
+     */
+    playingKey: Any?,
     isPlaying: Boolean,
     favorites: FavoriteSongs,
     onShuffleAll: () -> Unit,
@@ -51,9 +54,12 @@ fun SongListScreen(
     /** The player's song was tapped: it goes on as it is. */
     onPlayingSong: () -> Unit,
     onFavorite: (song: Song, favorite: Boolean) -> Unit,
-    onSongActions: (Song) -> Unit,
+    /** Gets the held song and its position in [songs]. */
+    onSongActions: (index: Int, song: Song) -> Unit,
     /** False where every song is a favorite: in Favorites itself. */
     heartsShown: Boolean = true,
+    /** Tells the rows apart: the song, or where a song can be twice, which of them it is. */
+    rowKey: (index: Int, song: Song) -> Any = { _, song -> song.id },
 ) {
     val noCover = rememberRowNoCoverPainter()
     val actionsLabel = songActionsLabel()
@@ -79,13 +85,14 @@ fun SongListScreen(
                 },
             )
         }
-        itemsIndexed(songs, key = { _, song -> song.id }, contentType = { _, _ -> "song" }) { index, song ->
-            // Null for every row but the player's song's, so when the player changes, only the
-            // rows it changes for are composed again.
-            val isPlayingHere = if (song.id == playing?.id) isPlaying else null
+        itemsIndexed(songs, key = rowKey, contentType = { _, _ -> "song" }) { index, song ->
+            // Null for every row but the player's, so when the player changes, only the rows it
+            // changes for are composed again.
+            val key = rowKey(index, song)
+            val isPlayingHere = if (key == playingKey) isPlaying else null
             val isFavorite = song in favorites
             FavoriteSwipe(
-                song.id,
+                key,
                 isFavorite,
                 onToggle = { onFavorite(song, it) },
                 swipeRows,
@@ -98,7 +105,7 @@ fun SongListScreen(
                     noCover = noCover,
                     transformationSpec = transformationSpec,
                     onClick = if (isPlayingHere != null) onPlayingSong else ({ onSong(index) }),
-                    onActions = { onSongActions(song) },
+                    onActions = { onSongActions(index, song) },
                     actionsLabel = actionsLabel,
                     modifier = actions,
                     isFavorite = heartsShown && isFavorite,
@@ -120,14 +127,14 @@ private fun SongListScreenPreview() {
         SongListScreen(
             pluralStringResource(R.plurals.song_count, songs.size, songs.size),
             songs,
-            playing = songs[2],
+            playingKey = 3L,
             isPlaying = true,
             favorites = FavoriteSongs(mapOf(3L to Favorite(addedAtMs = 0, durationMs = null))),
             onShuffleAll = {},
             onSong = {},
             onPlayingSong = {},
             onFavorite = { _, _ -> },
-            onSongActions = {},
+            onSongActions = { _, _ -> },
         )
     }
 }

@@ -7,8 +7,10 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import com.sharkula.gusle.data.Favorites
 import com.sharkula.gusle.data.MusicLibrary
+import com.sharkula.gusle.data.Playlists
 import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.playback.LastPlayed
+import com.sharkula.gusle.playback.PlayerPlace
 import com.sharkula.gusle.playback.PlayingSong
 import com.sharkula.gusle.playback.PlayingSongHolder
 import com.sharkula.gusle.playback.UnplayableSongs
@@ -63,11 +65,24 @@ class GusleApp : Application(), SingletonImageLoader.Factory {
         }
     }
 
+    /**
+     * The playlists. Read as the app starts, for Home's count and the queue's name; from then on,
+     * matched with the songs whenever they're read ([Playlists.matchWith]).
+     */
+    val playlists by lazy {
+        Playlists(this).also { playlists ->
+            MainScope().launch {
+                playlists.load()
+                library.songs.collect { songs -> if (songs is Songs.Loaded) playlists.matchWith(songs.byId) }
+            }
+        }
+    }
+
     /** What screen readers are told that no screen shows, e.g. that a song was deleted. */
     val announcer by lazy { Announcer() }
 
     /** What follows a song's deletion, which outlives the screens that asked for it. */
-    val songDeleter by lazy { SongDeleter(this, library, playing, { favorites }, announcer) }
+    val songDeleter by lazy { SongDeleter(this, library, playing, { favorites }, { playlists }, announcer) }
 
     /** The secret that lets the tile open Now playing. */
     val nowPlayingKey by lazy { NowPlayingKey(this) }
@@ -76,6 +91,8 @@ class GusleApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         // Starts reading what played last, so Home can show it as soon as the songs are read.
         playing = PlayingSongHolder(library, lastPlayed, onChange = { tileUpdates.changed() })
+        // Read off the main thread meanwhile, so they're there when the songs are.
+        playlists
         // The songs read anew may change the tile too, e.g. once there are some to shuffle.
         MainScope().launch { library.songs.drop(1).collect { tileUpdates.changed() } }
         // A song deleted while Gusle's process died under Android's screen: its answer never came.
@@ -101,6 +118,9 @@ val Context.coverColors: CoverColors get() = (applicationContext as GusleApp).co
 /** The song the playback service is playing, or the one it played last; see [PlayingSongHolder]. */
 val Context.playingSong: StateFlow<PlayingSong?> get() = (applicationContext as GusleApp).playing.song
 
+/** Where the playback service's player is, e.g. which playlist entry; see [PlayingSongHolder.place]. */
+val Context.playerPlace: StateFlow<PlayerPlace?> get() = (applicationContext as GusleApp).playing.place
+
 /** The app's one [PlayingSongHolder], for where its song is and how long, from any of its contexts. */
 val Context.playingSongHolder: PlayingSongHolder get() = (applicationContext as GusleApp).playing
 
@@ -109,6 +129,9 @@ val Context.unplayableSongs: UnplayableSongs get() = (applicationContext as Gusl
 
 /** The app's one [Favorites], from any of its contexts. */
 val Context.favorites: Favorites get() = (applicationContext as GusleApp).favorites
+
+/** The app's one [Playlists], from any of its contexts. */
+val Context.playlists: Playlists get() = (applicationContext as GusleApp).playlists
 
 /** The app's one [Announcer], from any of its contexts. */
 val Context.announcer: Announcer get() = (applicationContext as GusleApp).announcer

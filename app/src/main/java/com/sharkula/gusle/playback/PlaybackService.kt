@@ -82,6 +82,7 @@ class PlaybackService : MediaSessionService() {
     private val lastPlayed get() = (application as GusleApp).lastPlayed
     private val unplayable get() = (application as GusleApp).unplayable
     private val tileUpdates get() = (application as GusleApp).tileUpdates
+    private val playlists get() = (application as GusleApp).playlists
     private var savingWhilePlaying: Job? = null
     private var notificationUpdate: Job? = null
     private var updatingNotification = false
@@ -140,7 +141,8 @@ class PlaybackService : MediaSessionService() {
             exoPlayer,
             unplayable,
             describe = { source ->
-                queueMetadata(source.name(musicLibrary.songs.value as? Songs.Loaded, resources), source)
+                val name = source.name(musicLibrary.songs.value as? Songs.Loaded, playlists.all.value, resources)
+                queueMetadata(name, source)
             },
         )
         player.addListener(followPlayer)
@@ -162,8 +164,10 @@ class PlaybackService : MediaSessionService() {
             val queue = lookup.lastQueue()?.takeIf { player.mediaItemCount == 0 } ?: return@launch
             queue.saved.run { sessionPlayer.restore(queue.items, source, current, positionMs, shuffleOrder) }
         }
-        // Its queue goes by the names the songs give now, e.g. once an artist is spelled another way.
+        // Its queue goes by the names the songs give now, e.g. once an artist is spelled another way,
+        // and the playlists, e.g. once they're read.
         scope.launch { musicLibrary.songs.collect { sessionPlayer.nameQueue() } }
+        scope.launch { playlists.all.collect { sessionPlayer.nameQueue() } }
         playing.update(player)
     }
 
@@ -309,6 +313,8 @@ class PlaybackService : MediaSessionService() {
 private fun Player.savedQueue(source: QueueSource): SavedQueue? {
     if (mediaItemCount == 0) return null
     val songIds = List(mediaItemCount) { getMediaItemAt(it).songId ?: return null }
+    // All of them, or none: they're from a playlist, or not.
+    val entryIds = List(mediaItemCount) { getMediaItemAt(it).entryId }.takeIf { null !in it }?.filterNotNull()
     return SavedQueue(
         songIds,
         shuffleOrder = if (shuffleModeEnabled) currentTimeline.playOrder(shuffled = true) else null,
@@ -316,6 +322,7 @@ private fun Player.savedQueue(source: QueueSource): SavedQueue? {
         // After the last song has ended, it comes back from that song's start, not its very end.
         positionMs = if (playbackState == Player.STATE_ENDED) 0 else currentPosition,
         source = source,
+        entryIds = entryIds,
     )
 }
 
@@ -408,7 +415,10 @@ private class SongLookup(
         val saved = lastPlayed.load() ?: return null
         val left = saved.keepOnly(songs::containsKey)
         if (left == null) lastPlayed.forget()
-        return left?.let { queue -> RestoredQueue(queue, queue.songIds.map { songs.getValue(it).toMediaItem() }) }
+        return left?.let { queue ->
+            val items = queue.songIds.mapIndexed { i, songId -> songs.getValue(songId).toMediaItem(queue.entryIds?.get(i)) }
+            RestoredQueue(queue, items)
+        }
     }
 
     /**
@@ -459,7 +469,8 @@ private class SongLookup(
      * of them is there, throws rather than answering with nothing: that would empty the queue.
      */
     private fun List<MediaItem>.toPlayable(songs: Map<Long, Song>): List<MediaItem> {
-        val playable = mapNotNull { songs.lookUp(it)?.toMediaItem() }
+        // Each with the playlist entry it was asked for as.
+        val playable = mapNotNull { request -> songs.lookUp(request)?.toMediaItem(request.entryId) }
         require(playable.isNotEmpty() || isEmpty()) { "None of the songs asked for is on the watch" }
         return playable
     }

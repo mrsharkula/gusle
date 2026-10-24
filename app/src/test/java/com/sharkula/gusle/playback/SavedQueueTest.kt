@@ -12,6 +12,8 @@ class SavedQueueTest {
         currentSongId,
         positionMs,
         QueueSource.decode(source.encoded),
+        current,
+        entryIds?.joinedNumbers(),
     )
 
     @Test
@@ -36,6 +38,41 @@ class SavedQueueTest {
         assertNull(SavedQueue.of("1,2,3", "0,1", 1, 0))
         assertNull(SavedQueue.of("1,2,3", "0,1,1", 1, 0))
         assertNull(SavedQueue.of("1,2,3", "0,1,3", 1, 0))
+    }
+
+    /** A playlist can have a song twice: the one it was on, wherever the other is. */
+    @Test
+    fun readsBackWhichOfASongThatsThereTwice() {
+        for (current in listOf(0, 2)) {
+            val queue = SavedQueue(listOf(30L, 12L, 30L), null, current, positionMs = 1_000, QueueSource.Playlist(4, "Calm"))
+            assertEquals(queue, queue.storedAndRead())
+        }
+    }
+
+    @Test
+    fun readsBackThePlaylistsEntries() {
+        val queue = SavedQueue(listOf(30L, 12L, 30L), listOf(1, 2, 0), 2, 1_000, QueueSource.Playlist(4, "Calm"), listOf(5L, 6L, 9L))
+        assertEquals(queue, queue.storedAndRead())
+        // Entries that don't fit the songs, e.g. damaged, are left out.
+        assertNull(SavedQueue.of("30,12,30", null, 30, 1_000, entryIds = "5,6")?.entryIds)
+        assertNull(SavedQueue.of("30,12,30", null, 30, 1_000, entryIds = "5,x,9")?.entryIds)
+    }
+
+    /** A song left out keeps the entries of the others with them. */
+    @Test
+    fun keepsTheEntriesOfTheSongsLeft() {
+        val queue = SavedQueue(listOf(30L, 12L, 30L, 4L), null, 3, 1_000, QueueSource.Playlist(4, "Calm"), listOf(5L, 6L, 9L, 11L))
+        val left = queue.keepOnly { it != 12L }
+        assertEquals(listOf(30L, 30L, 4L), left?.songIds)
+        assertEquals(listOf(5L, 9L, 11L), left?.entryIds)
+    }
+
+    /** E.g. stored by a build that didn't keep it, or the two stored apart don't match: the first. */
+    @Test
+    fun takesTheFirstOfASongThatsThereTwiceWhenWhereItWasDoesntFit() {
+        assertEquals(SavedQueue(listOf(30L, 12L, 30L), null, 0, 1_000), SavedQueue.of("30,12,30", null, 30, 1_000))
+        assertEquals(SavedQueue(listOf(30L, 12L, 30L), null, 0, 1_000), SavedQueue.of("30,12,30", null, 30, 1_000, currentIndex = 1))
+        assertEquals(SavedQueue(listOf(30L, 12L, 30L), null, 0, 1_000), SavedQueue.of("30,12,30", null, 30, 1_000, currentIndex = 7))
     }
 
     /** The song and the queue are stored apart; if they don't match, the queue starts over. */
