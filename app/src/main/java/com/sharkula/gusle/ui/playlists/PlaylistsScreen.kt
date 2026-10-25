@@ -40,8 +40,9 @@ fun rememberPlaylists(): List<Playlist>? {
 /**
  * The [playlists], oldest first, each with its first song's cover (the list icon when none of its
  * songs is on the watch), its name, and how many of its songs are ([songsById]). The playlist the
- * player's queue came from ([playingFrom]) is marked like an artist with the player's song. New
- * playlist is the edge button. With no playlists, a screen says how they're made, with New playlist.
+ * player's queue came from ([playingFrom]) is marked like an artist with the player's song. Holding a
+ * playlist opens its actions ([onPlaylistActions]). New playlist is the edge button. With no
+ * playlists, a screen says how they're made, with New playlist.
  */
 @Composable
 fun PlaylistsScreen(
@@ -51,6 +52,7 @@ fun PlaylistsScreen(
     playingFrom: Long?,
     isPlaying: Boolean,
     onPlaylist: (Playlist) -> Unit,
+    onPlaylistActions: (Playlist) -> Unit,
     onNewPlaylist: () -> Unit,
 ) {
     // Once per list, not as each row is composed again, e.g. as the player plays or pauses.
@@ -82,6 +84,8 @@ fun PlaylistsScreen(
         edgeButton = {
             ActionEdgeButton(stringResource(R.string.new_playlist), onNewPlaylist, icon = { AddIcon() }, AddIconGap)
         },
+        onGroupActions = { onPlaylistActions(it.playlist) },
+        groupActionsLabel = stringResource(R.string.open_playlist_options),
     )
 }
 
@@ -126,6 +130,7 @@ private fun PlaylistsScreenPreview() {
             playingFrom = 1,
             isPlaying = true,
             onPlaylist = {},
+            onPlaylistActions = {},
             onNewPlaylist = {},
         )
     }
@@ -135,6 +140,14 @@ private fun PlaylistsScreenPreview() {
 @Composable
 private fun PlaylistsScreenEmptyPreview() {
     GusleTheme {
-        PlaylistsScreen(emptyList(), previewSongs, playingFrom = null, isPlaying = false, onPlaylist = {}, onNewPlaylist = {})
+        PlaylistsScreen(
+            emptyList(),
+            previewSongs,
+            playingFrom = null,
+            isPlaying = false,
+            onPlaylist = {},
+            onPlaylistActions = {},
+            onNewPlaylist = {},
+        )
     }
 }

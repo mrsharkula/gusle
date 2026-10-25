@@ -54,6 +54,7 @@ import com.sharkula.gusle.ui.playback.playFrom
 import com.sharkula.gusle.ui.playback.rememberPlayerConnection
 import com.sharkula.gusle.ui.playback.shuffleAll
 import com.sharkula.gusle.ui.playlists.AddToPlaylistScreen
+import com.sharkula.gusle.ui.playlists.PlaylistActionsScreen
 import com.sharkula.gusle.ui.playlists.PlaylistsScreen
 import com.sharkula.gusle.ui.playlists.rememberPlaylistNaming
 import com.sharkula.gusle.ui.playlists.rememberPlaylists
@@ -110,6 +111,10 @@ sealed interface Screen : NavKey {
     /** A playlist's songs, by its [com.sharkula.gusle.data.Playlist.id]. */
     @Serializable
     data class Playlist(val id: Long) : Screen
+
+    /** What can be done to the playlist with [id], opened by holding it: Rename and Delete. */
+    @Serializable
+    data class PlaylistActions(val id: Long) : Screen
 
     @Serializable
     data object NowPlaying : Screen
@@ -251,19 +256,23 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
     }
     // An artist or album whose songs are all gone when they're read anew closes, wherever it is in
     // the stack, rather than showing no songs; so does one the stack was saved with, a song's
-    // actions and the playlists to add it to once the song is gone, and a playlist once it's deleted
-    // (as soon as the playlists are read, for one the stack was saved with). Followed here rather
-    // than read as state, so a change doesn't compose the navigation again.
+    // actions and the playlists to add it to once the song is gone, and a playlist, its actions and
+    // the actions of a song held in it once it's deleted (as soon as the playlists are read, for one
+    // the stack was saved with). Followed here rather than read as state, so a change doesn't compose
+    // the navigation again.
     val playlistStore = LocalContext.current.playlists
     LaunchedEffect(songs, playlistStore) {
         playlistStore.all.collect { playlists ->
+            fun deleted(playlistId: Long) = playlists != null && playlists.none { it.id == playlistId }
+            fun SongPlace.isGone() = this is SongPlace.InPlaylist && deleted(playlistId)
             backStack.removeAll { screen ->
                 when (screen) {
                     is Screen.Artist -> screen.key !in songs.artistsByKey
                     is Screen.Album -> screen.key !in songs.albumsByKey
-                    is Screen.SongActions -> screen.songId !in songs.byId
-                    is Screen.AddToPlaylist -> screen.songId !in songs.byId
-                    is Screen.Playlist -> playlists != null && playlists.none { it.id == screen.id }
+                    is Screen.SongActions -> screen.songId !in songs.byId || screen.place.isGone()
+                    is Screen.AddToPlaylist -> screen.songId !in songs.byId || screen.place.isGone()
+                    is Screen.Playlist -> deleted(screen.id)
+                    is Screen.PlaylistActions -> deleted(screen.id)
                     else -> false
                 }
             }
@@ -489,7 +498,36 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                         playingFrom = (place?.source as? QueueSource.Playlist)?.id?.takeIf { playing != null },
                         isPlaying = isPlaying,
                         onPlaylist = { go(Screen.Playlist(it.id)) },
+                        onPlaylistActions = { go(Screen.PlaylistActions(it.id)) },
                         onNewPlaylist = naming::ask,
+                    )
+                }
+            }
+            // Over the Playlists list, in the playing song's colors, as a song's actions. Rename opens
+            // Wear's text input with the name it has, and the screen shows the new one; the Queue, the
+            // media controls and the saved queue take it too, as the playback service and the playing
+            // song follow the playlists. Delete closes it once the playlist is gone (see above), back
+            // to the list, which screen readers hear; the playing playlist's queue plays on under the
+            // name it had.
+            entry<Screen.PlaylistActions>(metadata = { slidesIn(it) }) { screen ->
+                // First, so a name still arrives when Gusle is restored before the playlists are read
+                // again.
+                val naming = rememberPlaylistNaming { name ->
+                    scope.launch(start = CoroutineStart.UNDISPATCHED) { playlistStore.rename(screen.id, name) }
+                }
+                val playlist = lastNotNull(rememberPlaylists()?.firstOrNull { it.id == screen.id }) ?: return@entry
+                val deleted = stringResource(R.string.deleted)
+                PlayingSongTheme(songs) { _, _ ->
+                    PlaylistActionsScreen(
+                        playlist,
+                        songs.byId,
+                        onRename = { naming.ask(current = playlist.name) },
+                        onDelete = {
+                            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                                if (playlistStore.delete(playlist.id)) announcer.say(deleted)
+                            }
+                        },
+                        onTop = backStack.lastOrNull() == screen,
                     )
                 }
             }

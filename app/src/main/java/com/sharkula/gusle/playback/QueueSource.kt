@@ -131,3 +131,11 @@ fun QueueSource.name(songs: Songs.Loaded?, playlists: List<Playlist>?, resources
  */
 internal fun QueueSource.Playlist.nameAmong(playlists: List<Playlist>?): String =
     playlists?.firstOrNull { it.id == id }?.name ?: name
+
+/**
+ * This source as it's kept from now on: a playlist with the name it has among the [playlists] now
+ * ([nameAmong]), e.g. after it was renamed, so the queue goes by that name once the playlist is
+ * deleted; anything else as it is.
+ */
+fun QueueSource.namedAmong(playlists: List<Playlist>?): QueueSource =
+    if (this is QueueSource.Playlist) copy(name = nameAmong(playlists)) else this

@@ -16,7 +16,7 @@
     <string name="delete_from_watch">Delete from the watch</string>
     <!-- Gusle's question before Android's own, e.g. "Delete “Bismarck” from the watch?". -->
     <string name="delete_song_question">Delete “%1$s” from the watch?</string>
-    <!-- Said to screen readers once a song is deleted and its actions have closed. -->
+    <!-- Said to screen readers once a song or a playlist is deleted and its actions have closed. -->
     <string name="deleted">Deleted</string>
     <string name="couldnt_delete">Couldn\'t delete</string>
     <string name="no_favorites_title">No favorites yet</string>
@@ -36,6 +36,14 @@
     <string name="added_to_playlist">Added to “%1$s”</string>
     <!-- Said to screen readers once a song is taken out of a playlist and its actions have closed. -->
     <string name="removed_from_playlist">Removed</string>
+    <!-- What holding a playlist does, as screen readers offer it: "Double-tap and hold to open playlist options". -->
+    <string name="open_playlist_options">Open playlist options</string>
+    <!-- The button on a playlist's actions that opens Wear's text input with its name. -->
+    <string name="rename">Rename</string>
+    <!-- Gusle's question before a playlist is deleted, e.g. "Delete “Road trip”?", with
+         delete_playlist_text under it. -->
+    <string name="delete_playlist_question">Delete “%1$s”?</string>
+    <string name="delete_playlist_text">Its songs stay on the watch.</string>
     <string name="albums">Albums</string>
     <string name="artists">Artists</string>
     <!-- Stands for the artist of the songs without one: in Artists, and as their songs' title. -->

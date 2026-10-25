@@ -343,6 +343,83 @@ class PlaylistsTest {
     }
 
     @Test
+    fun aRenamedOneKeepsItsPlaceAndSongsAndComesBackAfterARestart() {
+        val two = entry(2)
+        saved(1, "Road trip", two)
+        saved(2, "Workout")
+        val playlists = playlists()
+        assertTrue(runBlocking { playlists.rename(1, "Night drive") })
+        val expected = listOf(Playlist(1, "Night drive", listOf(two)), Playlist(2, "Workout", emptyList()))
+        assertEquals(expected, playlists.all.value)
+        assertEquals(expected, playlists().loaded())
+    }
+
+    /** E.g. the current name, offered as the text input's choice, was tapped. */
+    @Test
+    fun renamingToTheSameNameWritesNothing() {
+        saved(1, "Road trip")
+        val playlists = playlists()
+        playlists.loaded()
+        val writes = file.writes
+        assertTrue(runBlocking { playlists.rename(1, "Road trip") })
+        assertEquals(writes, file.writes)
+    }
+
+    @Test
+    fun renamingOrDeletingOneThatIsntThereDoesNothing() {
+        saved(1, "Road trip")
+        val playlists = playlists()
+        playlists.loaded()
+        val writes = file.writes
+        assertFalse(runBlocking { playlists.rename(2, "Workout") })
+        assertFalse(runBlocking { playlists.delete(2) })
+        assertEquals(writes, file.writes)
+        assertEquals(listOf(Playlist(1, "Road trip", emptyList())), playlists.all.value)
+    }
+
+    @Test
+    fun aDeletedOneIsGoneAfterARestartAndTheOthersStay() {
+        val two = entry(2)
+        saved(1, "Road trip", entry(3))
+        saved(2, "Workout", two)
+        val playlists = playlists()
+        assertTrue(runBlocking { playlists.delete(1) })
+        val expected = listOf(Playlist(2, "Workout", listOf(two)))
+        assertEquals(expected, playlists.all.value)
+        assertEquals(expected, playlists().loaded())
+    }
+
+    /**
+     * The player's queue may still carry a deleted playlist's ID and its entries', also after a
+     * restart: a new one never gets them, not even when they were the newest.
+     */
+    @Test
+    fun aDeletedOnesIdsAreNeverGivenAgain() {
+        val playlists = playlists()
+        playlists.created("Road trip", songs.getValue(1))
+        val newest = playlists.created("Workout", songs.getValue(2))
+        val newestEntry = playlists.entriesOf(newest).single()
+        runBlocking { playlists.delete(newest) }
+        val again = playlists()
+        val next = again.created("Calm", songs.getValue(3))
+        assertTrue(next > newest)
+        assertTrue(again.entriesOf(next).single().id > newestEntry.id)
+    }
+
+    /** Where nothing has counted the IDs yet: from the highest left, the deleted one's would be next. */
+    @Test
+    fun aDeletedOnesIdsAreNeverGivenAgainAfterDataFromBeforeTheCounters() {
+        saved(1, "Road trip", entry(1))
+        val newestEntry = entry(2)
+        saved(2, "Workout", newestEntry)
+        runBlocking { playlists().delete(2) }
+        val again = playlists()
+        val next = again.created("Calm", songs.getValue(3))
+        assertTrue(next > 2)
+        assertTrue(again.entriesOf(next).single().id > newestEntry.id)
+    }
+
+    @Test
     fun damagedOnesAreLeftOut() {
         val two = entry(2)
         saved(1, "Road trip", two)

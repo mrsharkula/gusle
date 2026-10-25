@@ -17,7 +17,9 @@ import com.sharkula.gusle.ui.covers.rememberRowNoCoverPainter
  * when the group has no song), its [label], and the [secondaryLabel] under it. The group the player's
  * song is in ([hasPlayingSong]) is marked like the song itself, so the way back to it is easy to
  * find. [first] goes before the groups, e.g. New playlist where a song is added to one, and an
- * [edgeButton] hugs the bottom, e.g. New playlist on the Playlists list.
+ * [edgeButton] hugs the bottom, e.g. New playlist on the Playlists list. Where [onGroupActions]
+ * isn't null, holding a row opens the group's actions, e.g. a playlist's, which screen readers offer
+ * as [groupActionsLabel].
  */
 @Composable
 fun <G : Any> SongGroupsScreen(
@@ -35,6 +37,8 @@ fun <G : Any> SongGroupsScreen(
     onGroup: (G) -> Unit,
     first: (@Composable TransformingLazyColumnItemScope.(TransformationSpec) -> Unit)? = null,
     edgeButton: (@Composable BoxScope.() -> Unit)? = null,
+    onGroupActions: ((G) -> Unit)? = null,
+    groupActionsLabel: String? = null,
 ) {
     val noCover = rememberRowNoCoverPainter(noCoverIcon)
 
@@ -50,6 +54,8 @@ fun <G : Any> SongGroupsScreen(
                 noCover = noCover,
                 transformationSpec = transformationSpec,
                 onClick = { onGroup(group) },
+                onLongClick = onGroupActions?.let { { it(group) } },
+                onLongClickLabel = groupActionsLabel,
             )
         }
     }

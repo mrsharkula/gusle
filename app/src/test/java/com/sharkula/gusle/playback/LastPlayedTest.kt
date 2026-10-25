@@ -5,6 +5,7 @@ import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import com.sharkula.gusle.FakePrefs
+import com.sharkula.gusle.data.Playlist
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -17,6 +18,9 @@ class LastPlayedTest {
     private fun lastPlayed() = LastPlayed { name -> files.getOrPut(name) { FakePrefs() } }
 
     private fun LastPlayed.loaded() = runBlocking { load() }
+
+    /** How often the files were written, all together. */
+    private fun writes() = files.values.sumOf { it.writes }
 
     private val queue = SavedQueue(listOf(10L, 20L, 30L), shuffleOrder = listOf(2, 0, 1), current = 1, positionMs = 31_500)
 
@@ -82,6 +86,30 @@ class LastPlayedTest {
         // From elsewhere: none.
         lastPlayed().save(queue)
         assertNull(lastPlayed().loaded()?.entryIds)
+    }
+
+    /**
+     * Its playlist renamed while nothing plays, then deleted: it comes back under the new name, not
+     * the one it was played under.
+     */
+    @Test
+    fun aQueueFromAPlaylistTakesItsNewName() {
+        val playlist = queue.copy(source = QueueSource.Playlist(1, "Road trip"), entryIds = listOf(7L, 8L, 9L))
+        val lastPlayed = lastPlayed()
+        lastPlayed.save(playlist)
+        lastPlayed.followNames(listOf(Playlist(1, "Night drive", emptyList())))
+        val renamed = playlist.copy(source = QueueSource.Playlist(1, "Night drive"))
+        assertEquals(renamed, lastPlayed().loaded())
+        // Nothing to write once it's deleted, nor for another playlist, or from elsewhere.
+        val writes = writes()
+        lastPlayed.followNames(emptyList())
+        lastPlayed.followNames(listOf(Playlist(2, "Workout", emptyList())))
+        assertEquals(writes, writes())
+        lastPlayed.save(queue)
+        val savedWrites = writes()
+        lastPlayed.followNames(listOf(Playlist(1, "Calm", emptyList())))
+        assertEquals(savedWrites, writes())
+        assertEquals(queue, lastPlayed().loaded())
     }
 
     /** As the builds before playlists saved it, without which of its items it was on: the first. */

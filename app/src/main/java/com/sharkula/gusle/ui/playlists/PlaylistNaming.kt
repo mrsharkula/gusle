@@ -30,8 +30,8 @@ private val LineBreaks = Regex("[\\r\\n]+")
 /**
  * Naming a playlist with Wear's own text input: "Playlist name" on top, and the keyboard or voice
  * under it ([ask]). What's typed or said reaches the screen that asked ([rememberPlaylistNaming]).
- * Nothing is suggested: the name is the user's. The keyboard opens empty and can't send an empty
- * name; a swipe right cancels.
+ * Nothing is suggested for a new one: the name is the user's. Renaming one offers its name now, which
+ * a tap keeps. The keyboard opens empty and can't send an empty name; a swipe right cancels.
  */
 @Stable
 class PlaylistNaming internal constructor(private val label: String) {
@@ -41,13 +41,17 @@ class PlaylistNaming internal constructor(private val label: String) {
     /** While Wear's text input is open: a second tap, e.g. a double tap, doesn't open another. */
     private var asking = false
 
-    /** Opens Wear's text input, unless it's open already. */
-    fun ask() {
+    /**
+     * Opens Wear's text input, unless it's open already, with [current], a renamed playlist's name
+     * now, as its one ready answer (a chip under the keyboard and voice); none for a new playlist.
+     */
+    fun ask(current: String? = null) {
         val launcher = launcher ?: return
         if (asking) return
         val input = RemoteInput.Builder(NameKey)
             .setLabel(label)
             .setAllowFreeFormInput(true)
+            .apply { if (current != null) setChoices(arrayOf<CharSequence>(current)) }
             // Only Wear's own buttons, the keyboard and voice, as tried on the watch.
             .wearableExtender { setEmojisAllowed(false) }
             .build()
@@ -68,9 +72,9 @@ class PlaylistNaming internal constructor(private val label: String) {
 }
 
 /**
- * Naming a playlist ([PlaylistNaming.ask]): [onNamed] gets the name, tidied ([tidyName]). Nothing
- * happens when the text input is cancelled, or the name is only spaces. Kept with the screen's saved
- * state, so the name still arrives after Gusle is recreated meanwhile.
+ * Naming a playlist ([PlaylistNaming.ask]), new or renamed: [onNamed] gets the name, tidied
+ * ([tidyName]). Nothing happens when the text input is cancelled, or the name is only spaces. Kept
+ * with the screen's saved state, so the name still arrives after Gusle is recreated meanwhile.
  */
 @Composable
 fun rememberPlaylistNaming(onNamed: (name: String) -> Unit): PlaylistNaming {

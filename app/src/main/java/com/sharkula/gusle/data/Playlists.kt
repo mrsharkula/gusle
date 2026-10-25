@@ -161,6 +161,41 @@ class Playlists internal constructor(openPrefs: () -> SharedPreferences) {
         }
     }
 
+    /**
+     * Calls the playlist with [playlistId] [name]; returns whether it's there. Its place among the
+     * others stays: they're oldest first.
+     */
+    @MainThread
+    suspend fun rename(playlistId: Long, name: String): Boolean {
+        val before = load()
+        val at = before.indexOfFirst { it.id == playlistId }
+        if (at < 0) return false
+        if (before[at].name == name) return true
+        val playlist = before[at].copy(name = name)
+        prefs.edit { write(playlist) }
+        playlists.value = before.toMutableList().apply { set(at, playlist) }
+        return true
+    }
+
+    /**
+     * Deletes the playlist with [playlistId]; returns whether it was there. Its songs stay on the
+     * watch, and its ID and its entries' are never given again: the player's queue may still carry
+     * them.
+     */
+    @MainThread
+    suspend fun delete(playlistId: Long): Boolean {
+        val before = load()
+        if (before.none { it.id == playlistId }) return false
+        prefs.edit {
+            remove(playlistId.toString())
+            // Kept as they are, also when it was the newest playlist, or had the newest entry.
+            putLong(NextIdKey, nextId)
+            putLong(NextEntryIdKey, nextEntryId)
+        }
+        playlists.value = before.filter { it.id != playlistId }
+        return true
+    }
+
     /** [song] as an entry of its own, with an ID no entry has had. */
     private fun newEntry(song: Song) = PlaylistEntry(nextEntryId++, song.id, song.durationMs)
 

@@ -8,6 +8,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ShuffleOrder
+import com.sharkula.gusle.data.Playlist
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
@@ -24,12 +25,16 @@ private const val OutputFault = PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FA
 class SessionPlayerTest {
     private val unplayable = UnplayableSongs(now = { 0L })
 
-    /** Songs 10, 20, 30, 40 (A–Z), on [current]. */
-    private fun player(current: Int, shuffleOrder: List<Int>? = null): Pair<SessionPlayer, FakePlayer> {
+    /** Songs 10, 20, 30, 40 (A–Z), on [current]; sources go by what [named] says. */
+    private fun player(
+        current: Int,
+        shuffleOrder: List<Int>? = null,
+        named: (QueueSource) -> QueueSource = { it },
+    ): Pair<SessionPlayer, FakePlayer> {
         val fake = FakePlayer(listOf(10L, 20L, 30L, 40L), shuffleOrder)
         fake.current = current
         val describe = { source: QueueSource -> MediaMetadata.Builder().setTitle("Named $source").build() }
-        return SessionPlayer(fake.player, unplayable, describe, Random(7)) to fake
+        return SessionPlayer(fake.player, unplayable, describe, named, Random(7)) to fake
     }
 
     @Test
@@ -223,6 +228,21 @@ class SessionPlayerTest {
         // Renamed, e.g. after the songs are read anew, it's still the same artist's.
         player.nameQueue()
         assertEquals("Named $artist", fake.playlistTitle)
+    }
+
+    /** Renamed, a playlist's queue takes the new name, which it keeps (and is saved with) once it's deleted. */
+    @Test
+    fun takesAPlaylistsNewName() {
+        var playlists = listOf(Playlist(3, "Road trip", emptyList()))
+        val (player, fake) = player(current = 0, named = { it.namedAmong(playlists) })
+        player.restore(fake.items, QueueSource.Playlist(3, "Road trip"), current = 0, positionMs = 0, shuffleOrder = null)
+        playlists = listOf(Playlist(3, "Night drive", emptyList()))
+        player.nameQueue()
+        assertEquals(QueueSource.Playlist(3, "Night drive"), player.queueSource)
+        assertEquals("Named ${QueueSource.Playlist(3, "Night drive")}", fake.playlistTitle)
+        playlists = emptyList()
+        player.nameQueue()
+        assertEquals(QueueSource.Playlist(3, "Night drive"), player.queueSource)
     }
 
     /** Only the screens set songs, and they note where they came from; songs that don't are All songs. */

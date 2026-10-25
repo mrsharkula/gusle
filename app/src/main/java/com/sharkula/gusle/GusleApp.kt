@@ -93,6 +93,12 @@ class GusleApp : Application(), SingletonImageLoader.Factory {
         playing = PlayingSongHolder(library, lastPlayed, onChange = { tileUpdates.changed() })
         // Read off the main thread meanwhile, so they're there when the songs are.
         playlists
+        // A saved queue from a playlist goes by its name now, e.g. once it's renamed: from when it's
+        // read, so it also takes a name given before, e.g. as Gusle was recreated during Rename.
+        MainScope().launch {
+            lastPlayed.load()
+            playlists.all.collect(playing::playlistsChanged)
+        }
         // The songs read anew may change the tile too, e.g. once there are some to shuffle.
         MainScope().launch { library.songs.drop(1).collect { tileUpdates.changed() } }
         // A song deleted while Gusle's process died under Android's screen: its answer never came.

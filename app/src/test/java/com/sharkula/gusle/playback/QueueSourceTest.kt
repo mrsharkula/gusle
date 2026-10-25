@@ -105,4 +105,16 @@ class QueueSourceTest {
         // Nor are they read yet, as the playback service starts.
         assertEquals("Road trip", QueueSource.Playlist(7, "Road trip").nameAmong(null))
     }
+
+    /** Renamed, then deleted: the queue keeps the new name. */
+    @Test
+    fun aPlaylistKeepsTheNameItHasNow() {
+        val renamed = QueueSource.Playlist(7, "Road trip").namedAmong(listOf(Playlist(7, "Night drive", emptyList())))
+        assertEquals(QueueSource.Playlist(7, "Night drive"), renamed)
+        assertEquals("Night drive", renamed.namedAmong(emptyList()).let { (it as QueueSource.Playlist).name })
+        assertEquals(renamed, renamed.namedAmong(null))
+        // Nothing else has a name to keep.
+        val artist = QueueSource.Artist("sabaton")
+        assertEquals(artist, artist.namedAmong(listOf(Playlist(7, "Night drive", emptyList()))))
+    }
 }

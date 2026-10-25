@@ -108,9 +108,16 @@ class PlaybackService : MediaSessionService() {
                 )
             ) {
                 save()
-            } else if (events.containsAny(Player.EVENT_TIMELINE_CHANGED, Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED)) {
+            } else if (
+                events.containsAny(
+                    Player.EVENT_TIMELINE_CHANGED,
+                    Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED,
+                    Player.EVENT_PLAYLIST_METADATA_CHANGED,
+                )
+            ) {
                 // The timeline also changes as each song loads, which changes nothing worth saving.
-                // Where the songs came from changes only with them.
+                // Where the songs came from changes only with them, or with the queue's name, e.g.
+                // a playlist renamed.
                 save(onlyNewQueue = true)
             }
             if (events.contains(Player.EVENT_IS_PLAYING_CHANGED)) saveWhilePlaying()
@@ -144,6 +151,7 @@ class PlaybackService : MediaSessionService() {
                 val name = source.name(musicLibrary.songs.value as? Songs.Loaded, playlists.all.value, resources)
                 queueMetadata(name, source)
             },
+            named = { source -> source.namedAmong(playlists.all.value) },
         )
         player.addListener(followPlayer)
         playing.serviceStarted(dropSong = ::dropDeletedSong)
@@ -165,7 +173,7 @@ class PlaybackService : MediaSessionService() {
             queue.saved.run { sessionPlayer.restore(queue.items, source, current, positionMs, shuffleOrder) }
         }
         // Its queue goes by the names the songs give now, e.g. once an artist is spelled another way,
-        // and the playlists, e.g. once they're read.
+        // and the playlists, e.g. once they're read, or one is renamed.
         scope.launch { musicLibrary.songs.collect { sessionPlayer.nameQueue() } }
         scope.launch { playlists.all.collect { sessionPlayer.nameQueue() } }
         playing.update(player)

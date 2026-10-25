@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.annotation.MainThread
 import androidx.core.content.edit
+import com.sharkula.gusle.data.Playlist
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.async
@@ -197,6 +198,18 @@ class LastPlayed internal constructor(openPrefs: (name: String) -> SharedPrefere
         val queue = load() ?: return
         val left = queue.keepOnly { it != songId }
         if (left == null) forget() else save(left)
+    }
+
+    /**
+     * A saved queue from a playlist takes the name the playlist has among the [playlists] now
+     * ([QueueSource.namedAmong]), e.g. once it's renamed, so it goes by that name once the playlist
+     * is deleted, as the player's queue does. Writes only when the name changed.
+     */
+    @MainThread
+    fun followNames(playlists: List<Playlist>?) {
+        val queue = saved ?: return
+        val source = queue.source.namedAmong(playlists)
+        if (source != queue.source) save(queue.copy(source = source))
     }
 
     /** Forgets the queue, e.g. once none of its songs is on the watch anymore. */

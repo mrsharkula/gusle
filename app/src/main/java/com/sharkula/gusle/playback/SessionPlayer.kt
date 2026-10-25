@@ -26,6 +26,8 @@ import kotlin.random.Random
  *
  * It knows where its songs came from ([queueSource]), which reaches it with them, and names their
  * queue after it in its playlist metadata ([describe]), for the Queue and the watch's media controls.
+ * A playlist renamed meanwhile is kept under its new name ([named]), and so saved, so the queue goes
+ * by that name once the playlist is deleted.
  *
  * Every command reaches the player through here, so it knows when Previous went to a song. Its own
  * skips go to [player] directly and keep that direction.
@@ -35,6 +37,8 @@ class SessionPlayer(
     private val player: ExoPlayer,
     private val unplayable: UnplayableSongs,
     private val describe: (QueueSource) -> MediaMetadata,
+    /** Where the songs came from as it goes by now, e.g. a playlist under its new name ([namedAmong]). */
+    private val named: (QueueSource) -> QueueSource = { it },
     private val random: Random = Random,
 ) : ForwardingPlayer(player) {
     /** Whether Previous went to the song it's on, until that song plays or another command moves on. */
@@ -124,9 +128,10 @@ class SessionPlayer(
     /**
      * Gives its queue the name of where its songs came from, noting where that is too ([queueSource]),
      * or none while it has no songs. Call it again when the name may have changed, e.g. once the
-     * songs are read anew.
+     * songs are read anew, or a playlist is renamed: then [queueSource] takes the new name too.
      */
     fun nameQueue() {
+        queueSource = named(queueSource)
         val metadata = if (player.mediaItemCount == 0) MediaMetadata.EMPTY else describe(queueSource)
         // MediaMetadata's equals leaves out the extras, where the source is noted, and the player
         // keeps metadata equal to what it has: here, under the same name (its only other part). So

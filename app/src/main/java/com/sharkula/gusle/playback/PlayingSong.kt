@@ -6,6 +6,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import com.sharkula.gusle.data.MusicLibrary
+import com.sharkula.gusle.data.Playlist
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
 import kotlinx.coroutines.CoroutineStart
@@ -48,11 +49,11 @@ val Player.knownDurationMs: Long? get() = duration.takeIf { it != C.TIME_UNSET }
  * The song in the playback service's player, for the screens that show it without connecting to
  * the service: connecting would start it. Without one, it's the song the player had last
  * ([LastPlayed]), paused: the service comes back to it when it starts. The app keeps one; only the
- * service changes it, apart from Stop playing forgetting a saved song ([forgetIfOnlySaved]) and a
- * song deleted from the watch ([forgetDeleted]). Where the player is ([place]) is kept apart, for
- * the few screens that show it, so the others don't follow every move of the player.
- * [onChange] runs whenever the song or whether it plays changes, though not as the saved one is
- * first read: the tile follows it.
+ * service changes it, apart from Stop playing forgetting a saved song ([forgetIfOnlySaved]), a song
+ * deleted from the watch ([forgetDeleted]) and a playlist renamed ([playlistsChanged]). Where the
+ * player is ([place]) is kept apart, for the few screens that show it, so the others don't follow
+ * every move of the player. [onChange] runs whenever the song or whether it plays changes, though
+ * not as the saved one is first read: the tile follows it.
  */
 class PlayingSongHolder(
     private val library: MusicLibrary,
@@ -172,6 +173,16 @@ class PlayingSongHolder(
             lastPlayed.forgetSong(songId)
             show()
         }
+    }
+
+    /**
+     * The playlists are [playlists] now, e.g. one was renamed. Without the service's player, the
+     * saved queue from a playlist takes the name it has now ([LastPlayed.followNames]), which it keeps
+     * once the playlist is deleted; the service's player does so itself. Nothing shown changes: the
+     * screens find the playlist by its ID ([place]).
+     */
+    fun playlistsChanged(playlists: List<Playlist>?) {
+        if (fromPlayer == null) lastPlayed.followNames(playlists)
     }
 
     /** The service went into the foreground, or left it. */

@@ -182,10 +182,11 @@ fun rememberCoverArt(song: Song?): CoverArt? = rememberArt(song, CoverColors::ar
  * song's: its colors aren't worked out ([CoverColors.pictureOnly]). Like [rememberCoverArt], in the
  * first frame when it's the one loaded last, e.g. by Now playing on the same song; otherwise once
  * it's read: at once from Coil's memory when a screen or the tile showed it lately, or within a
- * second on the watch. Null until then.
+ * second on the watch. Null until then. With no [song] (null), art without a picture. As the song
+ * changes, the art read last stays until the new one is there.
  */
 @Composable
-fun rememberCoverPicture(song: Song): CoverArt? = rememberArt(song, CoverColors::pictureOnly)
+fun rememberCoverPicture(song: Song?): CoverArt? = rememberArt(song, CoverColors::pictureOnly)
 
 /**
  * The [song]'s cover as [read] reads it, at the cover's size: the art loaded last when it's the same
@@ -212,7 +213,8 @@ private fun rememberArt(
 /**
  * The [picture] in a circle in the middle, or the no-cover note when there's none, fading into
  * black toward the edge, at [alpha] opacity. Center-cropped, so a 16:9 cover shows its middle. The
- * note glows in [noCoverColors]: the app theme's, which are a song without a cover's own.
+ * note glows in [noCoverColors]: the app theme's, which are a song without a cover's own; another
+ * [noCoverIcon] can stand in for it, e.g. a playlist's.
  */
 @Composable
 fun Cover(
@@ -220,8 +222,13 @@ fun Cover(
     alpha: Float,
     modifier: Modifier,
     noCoverColors: ColorScheme = LocalAppTheme.current.colors,
+    @DrawableRes noCoverIcon: Int = R.drawable.ic_music_note,
 ) {
-    val painter = if (picture != null) remember(picture) { BitmapPainter(picture) } else rememberNoCoverPainter(noCoverColors)
+    val painter = if (picture != null) {
+        remember(picture) { BitmapPainter(picture) }
+    } else {
+        rememberNoCoverPainter(noCoverColors, noCoverIcon)
+    }
     Image(
         painter,
         contentDescription = null,
@@ -253,12 +260,12 @@ private fun Modifier.fadeIntoBlack(alpha: Float) =
 private const val NoCoverGlowEdgeBrightness = 0.58f
 
 /**
- * A glow with a large faint music note, in [colors]: on Now playing the app theme's, which are a song
- * without a cover's, also while the last song's colors are still up.
+ * A glow with a large faint music note ([icon]), in [colors]: on Now playing the app theme's, which
+ * are a song without a cover's, also while the last song's colors are still up.
  */
 @Composable
-private fun rememberNoCoverPainter(colors: ColorScheme): Painter {
-    val note = painterResource(R.drawable.ic_music_note)
+private fun rememberNoCoverPainter(colors: ColorScheme, @DrawableRes icon: Int): Painter {
+    val note = painterResource(icon)
     return remember(note, colors) {
         val middle = colors.primaryContainer
         val edge = Color(
