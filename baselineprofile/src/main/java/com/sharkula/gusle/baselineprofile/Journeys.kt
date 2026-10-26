@@ -203,10 +203,12 @@ fun MacrobenchmarkScope.useEveryScreen() {
     // Settings is the edge button at the end of Home.
     repeat(2) { drag(down = true) }
     tap("Settings")
-    // Below Stop playing, Theme, Jump by and Rescan music: at the end of the list. Dragged there
-    // once the screen has slid in: a drag while it slid in once didn't scroll it.
-    waitUntilStill("Rescan music")
-    scrollToAndTap("About", down = true)
+    // Below Stop playing, Theme, Jump by and Rescan music: at the end of the list, which can't bring
+    // it up to the middle of the screen (so not scrollToAndTap). Dragged there once the screen has
+    // slid in, with Jump by its last row in sight: a drag while it slid in once didn't scroll it.
+    waitUntilStill("Jump by")
+    repeat(2) { drag(down = true) }
+    tap("About")
     waitFor("Plays the music stored on your watch.")
     pressBack()
     waitFor("Rescan music")
