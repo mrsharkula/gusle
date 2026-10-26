@@ -62,7 +62,7 @@ fun ThemeScreen(current: AppTheme, onChoose: (AppTheme) -> Unit) {
                 },
                 label = { Text(stringResource(theme.label)) },
                 secondaryLabel = if (theme == AppTheme.Default) {
-                    { Text(stringResource(R.string.theme_default)) }
+                    { Text(stringResource(R.string.default_choice)) }
                 } else {
                     null
                 },

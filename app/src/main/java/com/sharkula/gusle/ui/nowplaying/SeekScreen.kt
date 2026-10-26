@@ -92,10 +92,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Seeking in the playing song: where it is, big, and along the edge. Turning the crown moves
- * through the song, and it jumps there half a second after the crown stops; −10 s and +10 s jump at
- * once. In the song's colors, over its cover, dimmed. It follows the player like Now playing, also
- * on to the next song, and stays open after a jump, so the song can be nudged again. Holding the
- * title opens the song's actions ([onSongActions]), as on Now playing.
+ * through the song, and it jumps there half a second after the crown stops; the − and + buttons
+ * jump at once, by the step chosen in Settings ([JumpStep]). In the song's colors, over its cover,
+ * dimmed. It follows the player like Now playing, also on to the next song, and stays open after a
+ * jump, so the song can be nudged again. Holding the title opens the song's actions
+ * ([onSongActions]), as on Now playing.
  */
 @Composable
 fun SeekScreen(connection: PlayerConnection, songsById: Map<Long, Song>, onSongActions: (Song) -> Unit) {
@@ -141,8 +142,9 @@ private fun Seek(
     }
     // Nothing to seek in while there's no song, or while its length isn't known.
     val canSeek = mediaItem != null && durationMs() > 0
-    val onBack = remember(seek, canSeek) { if (canSeek) ({ seek.skip(-SkipMs) }) else null }
-    val onForward = remember(seek, canSeek) { if (canSeek) ({ seek.skip(SkipMs) }) else null }
+    val step = LocalJumpStep.current
+    val onBack = remember(seek, canSeek, step) { if (canSeek) ({ seek.skip(-step.ms) }) else null }
+    val onForward = remember(seek, canSeek, step) { if (canSeek) ({ seek.skip(step.ms) }) else null }
 
     Seek(
         title = if (mediaItem == null) {
@@ -156,15 +158,13 @@ private fun Seek(
         durationMs = durationMs,
         hintAlpha = remember(hint) { { hint.value } },
         onCrownStep = remember(seek) { seek::step },
+        step = step,
         onBack = onBack,
         onForward = onForward,
         // None for a song deleted while it plays.
         onSongActions = remember(song, onSongActions) { song?.let { { onSongActions(it) } } },
     )
 }
-
-/** The buttons jump this far back and on. */
-private const val SkipMs = 10_000L
 
 /** The song jumps this long after the crown's last step. */
 private const val JumpDelayMs = 500L
@@ -360,6 +360,8 @@ private fun Seek(
     hintAlpha: () -> Float,
     /** A step of the crown, [forward] or back, at [timeMs]; whether it moved anything. */
     onCrownStep: (forward: Boolean, timeMs: Long) -> Boolean,
+    /** How far the buttons jump, which their icons and labels say. */
+    step: JumpStep,
     /** Null while there's no song, or its length isn't known, which disables the buttons. */
     onBack: (() -> Unit)?,
     onForward: (() -> Unit)?,
@@ -368,6 +370,7 @@ private fun Seek(
 ) {
     val haptics = LocalHapticFeedback.current
     val actionsLabel = stringResource(R.string.open_song_options)
+    val resources = LocalResources.current
     val crownStepPx = with(LocalDensity.current) { SeekCrownStep.toPx() }
     val crown = remember(crownStepPx) { CrownSteps(crownStepPx) }
     GusleTheme(colorScheme = art?.colors) {
@@ -410,14 +413,14 @@ private fun Seek(
                 // Back on the left and on to the right, also in right-to-left languages, like the
                 // controls on Now playing.
                 SkipButton(
-                    R.drawable.ic_replay_10,
-                    stringResource(R.string.back_10_seconds),
+                    step.backIcon,
+                    step.backLabel(resources),
                     onBack,
                     Modifier.align(AbsoluteAlignment.TopLeft).absolutePadding(left = 22.dp, top = 86.dp),
                 )
                 SkipButton(
-                    R.drawable.ic_forward_10,
-                    stringResource(R.string.forward_10_seconds),
+                    step.forwardIcon,
+                    step.forwardLabel(resources),
                     onForward,
                     Modifier.align(AbsoluteAlignment.TopRight).absolutePadding(top = 86.dp, right = 22.dp),
                 )
@@ -641,8 +644,21 @@ private fun SeekTurningPreview() {
     SeekPreview(landingMs = 125_000, hintAlpha = 1f)
 }
 
+@Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true)
 @Composable
-private fun SeekPreview(landingMs: Long?, hintAlpha: Float) {
+private fun SeekFiveSecondsPreview() {
+    SeekPreview(landingMs = null, hintAlpha = 0f, step = JumpStep.Five)
+}
+
+@Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true)
+@Composable
+private fun SeekFifteenSecondsPreview() {
+    // Its icons are Gusle's own, drawn from Material's 5 and 10.
+    SeekPreview(landingMs = null, hintAlpha = 0f, step = JumpStep.Fifteen)
+}
+
+@Composable
+private fun SeekPreview(landingMs: Long?, hintAlpha: Float, step: JumpStep = JumpStep.Default) {
     GusleTheme {
         AppScaffold {
             ScreenScaffold {
@@ -654,6 +670,7 @@ private fun SeekPreview(landingMs: Long?, hintAlpha: Float) {
                     durationMs = { 225_000 },
                     hintAlpha = { hintAlpha },
                     onCrownStep = { _, _ -> true },
+                    step = step,
                     onBack = {},
                     onForward = {},
                     onSongActions = {},

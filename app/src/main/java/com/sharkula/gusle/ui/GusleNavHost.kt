@@ -32,6 +32,7 @@ import com.sharkula.gusle.announcer
 import com.sharkula.gusle.data.FavoriteSongs
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
+import com.sharkula.gusle.jumpStepChoice
 import com.sharkula.gusle.playback.PlayerPlace
 import com.sharkula.gusle.playback.QueueSource
 import com.sharkula.gusle.playerPlace
@@ -48,6 +49,7 @@ import com.sharkula.gusle.ui.covers.playingSongColors
 import com.sharkula.gusle.ui.favorites.rememberFavorites
 import com.sharkula.gusle.ui.favorites.rememberSetFavorite
 import com.sharkula.gusle.ui.home.HomeScreen
+import com.sharkula.gusle.ui.nowplaying.LocalJumpStep
 import com.sharkula.gusle.ui.nowplaying.NowPlayingScreen
 import com.sharkula.gusle.ui.nowplaying.SeekScreen
 import com.sharkula.gusle.ui.playback.playFrom
@@ -60,6 +62,7 @@ import com.sharkula.gusle.ui.playlists.rememberPlaylistNaming
 import com.sharkula.gusle.ui.playlists.rememberPlaylists
 import com.sharkula.gusle.ui.queue.QueueScreen
 import com.sharkula.gusle.ui.settings.AboutScreen
+import com.sharkula.gusle.ui.settings.JumpStepScreen
 import com.sharkula.gusle.ui.settings.SettingsScreen
 import com.sharkula.gusle.ui.settings.ThemeScreen
 import com.sharkula.gusle.ui.songs.DeletionStep
@@ -148,6 +151,10 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object Theme : Screen
+
+    /** How far the − and + buttons jump, chosen in Settings. */
+    @Serializable
+    data object JumpStep : Screen
 
     @Serializable
     data object About : Screen
@@ -701,6 +708,7 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                         // Gusle closes once the song's gone; it opens next time with nothing playing.
                         onStopPlaying = { player.stopAndForget { activity?.finish() } },
                         onTheme = { go(Screen.Theme) },
+                        onJumpStep = { go(Screen.JumpStep) },
                         onAbout = { go(Screen.About) },
                     )
                 }
@@ -709,6 +717,12 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
                 val themes = LocalContext.current.themeChoice
                 PlayingSongTheme(songs) { _, _ ->
                     ThemeScreen(current = LocalAppTheme.current, onChoose = themes::choose)
+                }
+            }
+            entry<Screen.JumpStep>(metadata = slidesIn(Screen.JumpStep)) {
+                val jumpSteps = LocalContext.current.jumpStepChoice
+                PlayingSongTheme(songs) { _, _ ->
+                    JumpStepScreen(current = LocalJumpStep.current, onChoose = jumpSteps::choose)
                 }
             }
             entry<Screen.About>(metadata = slidesIn(Screen.About)) {

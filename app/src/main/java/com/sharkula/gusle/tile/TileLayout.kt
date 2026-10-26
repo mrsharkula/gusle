@@ -1,7 +1,6 @@
 package com.sharkula.gusle.tile
 
 import android.content.Context
-import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.wear.compose.material3.ColorScheme
@@ -50,6 +49,7 @@ import androidx.wear.protolayout.types.LayoutString
 import androidx.wear.protolayout.types.argb
 import com.sharkula.gusle.R
 import com.sharkula.gusle.ui.components.formatLength
+import com.sharkula.gusle.ui.nowplaying.JumpStep
 import java.time.Instant
 import androidx.wear.protolayout.material3.ColorScheme as TileColorScheme
 
@@ -124,8 +124,6 @@ enum class TileButton(val id: String) {
     Play("play"),
     Pause("pause"),
     Previous("previous"),
-    Back("back"),
-    Forward("forward"),
     Next("next"),
     ShuffleAll("shuffle_all");
 
@@ -160,11 +158,40 @@ data class FavoriteTap(val songId: Long, val favorite: Boolean) {
 private const val FavoritePrefix = "favorite:"
 
 /**
+ * A tap on one of the tile's jump buttons, as its ID comes back in the tile request: back or
+ * [forward], by the [step] the tile showed, whatever has been chosen since: a tile made before the
+ * choice, and not made anew yet, jumps as its icons say.
+ */
+data class JumpTap(val forward: Boolean, val step: JumpStep) {
+    val id: String get() = "$JumpPrefix${if (forward) "forward" else "back"}:${step.id}"
+
+    /** How far it jumps: on, or back if it's negative. */
+    val byMs: Long get() = if (forward) step.ms else -step.ms
+
+    companion object {
+        /** The tap with this [id], or null when it isn't a jump button's. */
+        fun of(id: String?): JumpTap? {
+            if (id == null || !id.startsWith(JumpPrefix)) return null
+            val parts = id.removePrefix(JumpPrefix).split(':')
+            val forward = when (parts.getOrNull(0)) {
+                "forward" -> true
+                "back" -> false
+                else -> return null
+            }
+            val step = JumpStep.entries.firstOrNull { it.id == parts.getOrNull(1) } ?: return null
+            return if (parts.size == 2) JumpTap(forward, step) else null
+        }
+    }
+}
+
+private const val JumpPrefix = "jump:"
+
+/**
  * The tile's layout: [shows] in [colors] (a song's cover's, or the app theme's), on a black
  * background, as chosen in designs/v2/TILE.md (3d): the cover dimmed behind, the title and artist,
- * previous, −10 s, the favorite heart, +10 s and next (designs/v2/FAVORITES.md), the time and a bar
- * under them, and play/pause in the edge button. Material 3 tile parts throughout, with Gusle's own
- * colors rather than the watch's.
+ * previous, back, the favorite heart, forward and next (designs/v2/FAVORITES.md; back and forward
+ * jump by [jumpStep], chosen in Settings), the time and a bar under them, and play/pause in the
+ * edge button. Material 3 tile parts throughout, with Gusle's own colors rather than the watch's.
  */
 fun tileLayout(
     context: Context,
@@ -172,10 +199,11 @@ fun tileLayout(
     shows: TileShows,
     colors: ColorScheme,
     launches: TileLaunches,
+    jumpStep: JumpStep,
 ): LayoutElement =
     materialScope(context, device, allowDynamicTheme = false, defaultColorScheme = colors.toTileColors()) {
         when (shows) {
-            is TileShows.Song -> songLayout(context, shows, colors, launches)
+            is TileShows.Song -> songLayout(context, shows, colors, launches, jumpStep)
             is TileShows.Nothing -> nothingLayout(context, shows, launches.home)
         }
     }
@@ -190,6 +218,7 @@ private fun MaterialScope.songLayout(
     song: TileShows.Song,
     colors: ColorScheme,
     launches: TileLaunches,
+    jumpStep: JumpStep,
 ): LayoutElement {
     val scale = deviceConfiguration.screenWidthDp / DesignWidth
     val layout = primaryLayout(
@@ -201,21 +230,22 @@ private fun MaterialScope.songLayout(
                 // Five in a row only fit smaller than the usual 48 dp, and with the least margin.
                 buttonGroup(height = dp(ButtonSize)) {
                     buttonGroupItem {
-                        songButton(context, TileButton.Previous.id, TileIcon.Previous, R.string.previous_song)
+                        songButton(TileButton.Previous.id, TileIcon.Previous, context.getString(R.string.previous_song))
                     }
-                    buttonGroupItem { songButton(context, TileButton.Back.id, TileIcon.Back, R.string.back_10_seconds) }
+                    buttonGroupItem {
+                        songButton(JumpTap(forward = false, jumpStep).id, TileIcon.back(jumpStep), jumpStep.backLabel(context.resources))
+                    }
                     buttonGroupItem {
                         songButton(
-                            context,
                             FavoriteTap(song.songId, favorite = !song.isFavorite).id,
                             if (song.isFavorite) TileIcon.Favorite else TileIcon.NotFavorite,
-                            if (song.isFavorite) R.string.remove_from_favorites else R.string.add_to_favorites,
+                            context.getString(if (song.isFavorite) R.string.remove_from_favorites else R.string.add_to_favorites),
                         )
                     }
                     buttonGroupItem {
-                        songButton(context, TileButton.Forward.id, TileIcon.Forward, R.string.forward_10_seconds)
+                        songButton(JumpTap(forward = true, jumpStep).id, TileIcon.forward(jumpStep), jumpStep.forwardLabel(context.resources))
                     }
-                    buttonGroupItem { songButton(context, TileButton.Next.id, TileIcon.Next, R.string.next_song) }
+                    buttonGroupItem { songButton(TileButton.Next.id, TileIcon.Next, context.getString(R.string.next_song)) }
                 },
                 spacer(height = dp(6f)),
                 progress(song, colors, BarWidth * scale),
@@ -290,18 +320,13 @@ private fun MaterialScope.songText(song: TileShows.Song, openNowPlaying: Clickab
 
 /**
  * One of the round, see-through buttons over the cover, which [clickId] names to the tile request
- * ([TileButton.id] or [FavoriteTap.id]).
+ * ([TileButton.id], [JumpTap.id] or [FavoriteTap.id]); [label] is for screen readers.
  */
-private fun MaterialScope.songButton(
-    context: Context,
-    clickId: String,
-    icon: TileIcon,
-    @StringRes label: Int,
-): LayoutElement {
+private fun MaterialScope.songButton(clickId: String, icon: TileIcon, label: String): LayoutElement {
     val primary = colorScheme.primary.staticArgb
     return iconButton(
         onClick = clickable(loadAction(), clickId),
-        modifier = LayoutModifier.contentDescription(context.getString(label)),
+        modifier = LayoutModifier.contentDescription(label),
         width = expand(),
         height = expand(),
         colors = ButtonColors(

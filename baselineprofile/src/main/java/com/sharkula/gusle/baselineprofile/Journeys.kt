@@ -102,8 +102,9 @@ private fun MacrobenchmarkScope.tapFirstSong() {
  * holding its row, and a song played, made a favorite with Now playing's heart, seeking in it, the
  * next songs, the Queue scrolled and a song played from it, back to Home with its playing song, an
  * artist's song played from Artists and an album's from Albums, the favorite played from Favorites
- * and removed there with a swipe, Settings with About, Stop playing, and another theme. It ends with
- * nothing playing and no favorites, so no music plays on between runs, and in walnut.
+ * and removed there with a swipe, Settings with About, Stop playing, another theme and another jump
+ * step. It ends with nothing playing and no favorites, so no music plays on between runs, in walnut
+ * and with jumps of 10 s.
  */
 fun MacrobenchmarkScope.useEveryScreen() {
     tap("All songs")
@@ -202,12 +203,10 @@ fun MacrobenchmarkScope.useEveryScreen() {
     // Settings is the edge button at the end of Home.
     repeat(2) { drag(down = true) }
     tap("Settings")
-    // Below Stop playing, Theme and Rescan music: at the end of the list, which can't bring it up to
-    // the middle of the screen. Dragged there once the screen has slid in: a drag while it slid in
-    // once didn't scroll it.
+    // Below Stop playing, Theme, Jump by and Rescan music: at the end of the list. Dragged there
+    // once the screen has slid in: a drag while it slid in once didn't scroll it.
     waitUntilStill("Rescan music")
-    drag(down = true)
-    tap("About")
+    scrollToAndTap("About", down = true)
     waitFor("Plays the music stored on your watch.")
     pressBack()
     waitFor("Rescan music")
@@ -218,6 +217,7 @@ fun MacrobenchmarkScope.useEveryScreen() {
     // Gusle closes as the song goes; it opens again on Home, in the theme.
     openHome()
     useThemes()
+    useJumpSteps()
     Thread.sleep(1_000)
 }
 
@@ -285,20 +285,22 @@ private fun MacrobenchmarkScope.useSongActions(title: String) {
 
 /**
  * From Now playing, opens the seek screen by the time under the title, turns the crown on through
- * the song and back, which jumps each time it stops, jumps 10 s on with the button, and goes back.
+ * the song and back, which jumps each time it stops, jumps on with the + button, and goes back.
  */
 private fun MacrobenchmarkScope.seek() {
     // Its label has the time in it, e.g. "4 seconds, seek".
     tap(checkNotNull(find { it.endsWith(", seek") }) { "No time under the title on ${onScreen().map { it.first }}" })
-    waitUntilStill("Forward 10 seconds")
+    // "Forward 10 seconds", unless a run that stopped half way left another step chosen.
+    val forward = waitForAny("Forward 10 seconds", "Forward 5 seconds", "Forward 15 seconds")
+    waitUntilStill(forward)
     // Once the hint has faded.
     Thread.sleep(3_000)
     turnCrown(4)
     turnCrown(-2)
-    tap("Forward 10 seconds")
+    tap(forward)
     Thread.sleep(1_000)
     pressBack()
-    waitUntilGone("Forward 10 seconds")
+    waitUntilGone(forward)
     waitFor("Pause")
 }
 
@@ -320,6 +322,30 @@ private fun MacrobenchmarkScope.useThemes() {
         // Settings, naming it.
         waitFor("Rescan music")
         waitFor(theme)
+        pressBack()
+        // Home, still at its end.
+        waitFor("Favorites")
+        Thread.sleep(1_000)
+    }
+}
+
+/**
+ * From Home with nothing playing, chooses another step in Settings → Jump by, which the row then
+ * names, and goes back through them; then 10 seconds again, so the next run starts the same.
+ */
+private fun MacrobenchmarkScope.useJumpSteps() {
+    for (step in listOf("15 seconds", "10 seconds")) {
+        repeat(2) { drag(down = true) }
+        tap("Settings")
+        tap("Jump by")
+        scrollToAndTap(step, down = true)
+        // The screen stays open, the step selected.
+        Thread.sleep(1_000)
+        pressBack()
+        // Settings, naming it: once the chooser, which names every step, has slid out.
+        waitUntilGone("5 seconds")
+        waitFor("Rescan music")
+        waitFor(step)
         pressBack()
         // Home, still at its end.
         waitFor("Favorites")

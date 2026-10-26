@@ -22,6 +22,8 @@ import com.sharkula.gusle.musicLibrary
 import com.sharkula.gusle.ui.components.IconCircle
 import com.sharkula.gusle.ui.components.ListButton
 import com.sharkula.gusle.ui.components.ListScreen
+import com.sharkula.gusle.ui.nowplaying.JumpStep
+import com.sharkula.gusle.ui.nowplaying.LocalJumpStep
 import com.sharkula.gusle.ui.songs.RescanState
 import com.sharkula.gusle.ui.songs.rememberRescanState
 import com.sharkula.gusle.ui.theme.AppTheme
@@ -29,8 +31,9 @@ import com.sharkula.gusle.ui.theme.GusleTheme
 import com.sharkula.gusle.ui.theme.LocalAppTheme
 
 /**
- * Stop playing, while there's a song to stop; Theme, with the chosen one's name; Rescan music, with
- * how many songs there are; and About, with Gusle's version. Opened from Home.
+ * Stop playing, while there's a song to stop; Theme, with the chosen one's name; Jump by, with the
+ * step the − and + buttons jump by; Rescan music, with how many songs there are; and About, with
+ * Gusle's version. Opened from Home.
  */
 @Composable
 fun SettingsScreen(
@@ -42,6 +45,7 @@ fun SettingsScreen(
     /** Stop playing was tapped: stop the song, forget it, and close Gusle. */
     onStopPlaying: () -> Unit,
     onTheme: () -> Unit,
+    onJumpStep: () -> Unit,
     onAbout: () -> Unit,
 ) {
     val rescan = rememberRescanState(LocalContext.current.musicLibrary)
@@ -55,6 +59,8 @@ fun SettingsScreen(
         onStopPlaying = onStopPlaying,
         themeName = LocalAppTheme.current.label,
         onTheme = onTheme,
+        jumpStep = LocalJumpStep.current,
+        onJumpStep = onJumpStep,
         scanning = rescan.busy,
         iconRotation = { rescan.rotation },
         version = rememberVersionName(),
@@ -73,6 +79,9 @@ private fun SettingsScreen(
     /** The chosen app theme's name; shown also while the screen is in a song's colors. */
     @StringRes themeName: Int,
     onTheme: () -> Unit,
+    /** The step the − and + buttons jump by, for its row. */
+    jumpStep: JumpStep,
+    onJumpStep: () -> Unit,
     /** From the Rescan tap until it's done; see [RescanState]. */
     scanning: Boolean,
     /** The refresh icon's angle in degrees, read only while drawing. */
@@ -120,6 +129,23 @@ private fun SettingsScreen(
                 },
                 label = { Text(stringResource(R.string.theme)) },
                 secondaryLabel = { Text(stringResource(themeName)) },
+            )
+        }
+        item(key = "jump_step") {
+            ListButton(
+                onClick = onJumpStep,
+                transformationSpec = transformationSpec,
+                colors = rowColors,
+                icon = {
+                    // The step's own icon, with its number: the very button the seek screen has.
+                    IconCircle(
+                        icon = jumpStep.backIcon,
+                        background = colors.secondaryContainer,
+                        tint = colors.onSecondaryContainer,
+                    )
+                },
+                label = { Text(stringResource(R.string.jump_by)) },
+                secondaryLabel = { Text(pluralStringResource(R.plurals.seconds, jumpStep.seconds, jumpStep.seconds)) },
             )
         }
         item(key = "rescan") {
@@ -181,6 +207,8 @@ private fun SettingsScreenPreview() {
             onStopPlaying = {},
             themeName = AppTheme.Default.label,
             onTheme = {},
+            jumpStep = JumpStep.Default,
+            onJumpStep = {},
             scanning = false,
             iconRotation = { 0f },
             version = "1.0",
@@ -202,6 +230,8 @@ private fun SettingsScreenScanningPreview() {
             onStopPlaying = {},
             themeName = AppTheme.Default.label,
             onTheme = {},
+            jumpStep = JumpStep.Default,
+            onJumpStep = {},
             scanning = true,
             iconRotation = { 0f },
             version = "1.0",
@@ -223,6 +253,8 @@ private fun SettingsScreenPlayingPreview() {
             onStopPlaying = {},
             themeName = AppTheme.Default.label,
             onTheme = {},
+            jumpStep = JumpStep.Default,
+            onJumpStep = {},
             scanning = false,
             iconRotation = { 0f },
             version = "1.0",

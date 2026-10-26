@@ -1,5 +1,6 @@
 package com.sharkula.gusle.tile
 
+import com.sharkula.gusle.ui.nowplaying.JumpStep
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -23,6 +24,7 @@ class FavoriteTapTest {
     @Test
     fun theOtherButtonsArentOneEither() {
         for (button in TileButton.entries) assertNull(FavoriteTap.of(button.id))
+        assertNull(FavoriteTap.of(JumpTap(forward = true, JumpStep.Ten).id))
         assertNull(TileButton.of(FavoriteTap(61, true).id))
     }
 }

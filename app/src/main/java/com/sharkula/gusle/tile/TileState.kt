@@ -12,7 +12,9 @@ import com.sharkula.gusle.playback.knownDurationMs
 import com.sharkula.gusle.playback.playsOn
 import com.sharkula.gusle.playback.songId
 import com.sharkula.gusle.ui.covers.SongCover
+import com.sharkula.gusle.ui.nowplaying.JumpStep
 import com.sharkula.gusle.ui.nowplaying.coverSizePx
+import com.sharkula.gusle.ui.theme.AppTheme
 import java.time.Instant
 import kotlin.math.abs
 
@@ -125,10 +127,10 @@ data class TileLook(val still: String, val countsFromMs: Long?) {
     companion object {
         /**
          * How the tile looks with [content] on it, in the colors of the cover or, without its own,
-         * of the app theme [themeId]. The cover's colors come with the cover, so its resources'
-         * version stands for both.
+         * of the app [theme], a song's jump buttons by [jumpStep]. The cover's colors come with the
+         * cover, so its resources' version stands for both.
          */
-        internal fun of(content: TileContent, themeId: String): TileLook {
+        internal fun of(content: TileContent, theme: AppTheme, jumpStep: JumpStep): TileLook {
             val shows = content.shows
             val parts = when (shows) {
                 is TileShows.Nothing -> listOf("nothing", shows.canShuffle)
@@ -144,10 +146,12 @@ data class TileLook(val still: String, val countsFromMs: Long?) {
                     shows.durationS,
                     // A paused song's time stands still; a playing one's counts.
                     if (shows.counts) "counts" else shows.positionS,
+                    // Its jump buttons' icons.
+                    jumpStep.id,
                 )
             }
             val countsFrom = (shows as? TileShows.Song)?.takeIf { it.counts }?.startedAt?.toEpochMilli()
-            return TileLook((parts + content.resourcesVersion + themeId).joinToString(Separator), countsFrom)
+            return TileLook((parts + content.resourcesVersion + theme.id).joinToString(Separator), countsFrom)
         }
     }
 }

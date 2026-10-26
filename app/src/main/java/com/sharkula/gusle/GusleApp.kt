@@ -19,6 +19,7 @@ import com.sharkula.gusle.ui.components.Announcer
 import com.sharkula.gusle.ui.covers.CoverColors
 import com.sharkula.gusle.ui.covers.SongCoverFetcher
 import com.sharkula.gusle.ui.covers.SongCoverKeyer
+import com.sharkula.gusle.ui.nowplaying.JumpStepChoice
 import com.sharkula.gusle.ui.songs.SongDeleter
 import com.sharkula.gusle.ui.theme.ThemeChoice
 import kotlinx.coroutines.MainScope
@@ -48,6 +49,9 @@ class GusleApp : Application(), SingletonImageLoader.Factory {
      * playback service starts the app alone too, with no screen to color.
      */
     val themeChoice by lazy { ThemeChoice(this, onChoose = tileUpdates::changed) }
+
+    /** The step the − and + buttons jump by, chosen in Settings; made and read as the theme is. */
+    val jumpStepChoice by lazy { JumpStepChoice(this, onChoose = tileUpdates::changed) }
 
     /** Asks for a new tile when what it shows changes. */
     val tileUpdates by lazy { TileUpdates(this) }
@@ -147,3 +151,6 @@ val Context.songDeleter: SongDeleter get() = (applicationContext as GusleApp).so
 
 /** The app's one [ThemeChoice], from any of its contexts. */
 val Context.themeChoice: ThemeChoice get() = (applicationContext as GusleApp).themeChoice
+
+/** The app's one [JumpStepChoice], from any of its contexts. */
+val Context.jumpStepChoice: JumpStepChoice get() = (applicationContext as GusleApp).jumpStepChoice

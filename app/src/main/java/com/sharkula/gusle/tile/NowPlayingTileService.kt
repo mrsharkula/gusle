@@ -26,6 +26,7 @@ import com.sharkula.gusle.MainActivity
 import com.sharkula.gusle.OpenNowPlayingExtra
 import com.sharkula.gusle.coverColors
 import com.sharkula.gusle.data.Songs
+import com.sharkula.gusle.jumpStepChoice
 import com.sharkula.gusle.playback.PlaybackService
 import com.sharkula.gusle.playback.PlayerState
 import com.sharkula.gusle.playback.QueueSource
@@ -59,9 +60,6 @@ private const val Tag = "NowPlayingTile"
  */
 private const val TapTimeoutMs = 7_000L
 
-/** The jump buttons jump this far, as on the seek screen. */
-private const val SkipMs = 10_000L
-
 /**
  * After a playing song's end, the tile is made again this much later, by the system: the song
  * after it is playing by then, or nothing is.
@@ -70,8 +68,9 @@ private const val AfterSongEndMs = 1_500L
 
 /**
  * Gusle's tile, one swipe from the watch face: the song the player has, or had last, with
- * play/pause, previous and next, and jumps of 10 s; tapping the song opens Now playing. With no
- * song saved, it offers Shuffle all. See designs/v2/TILE.md.
+ * play/pause, previous and next, and jumps back and on by the step chosen in Settings
+ * ([com.sharkula.gusle.ui.nowplaying.JumpStep]); tapping the song opens Now playing. With no song
+ * saved, it offers Shuffle all. See designs/v2/TILE.md.
  *
  * The system asks for the tile when it's added, when Gusle asks for an update ([TileUpdates]), when
  * the playing song ends ([Tile.Builder.setFreshnessIntervalMillis]), and for a tap on a button. It
@@ -85,9 +84,12 @@ class NowPlayingTileService : TileService() {
     override fun onTileRequest(requestParams: TileRequest): ListenableFuture<Tile> = future {
         val clicked = requestParams.currentState.lastClickableId
         val songs = app.library.songsForTile()
-        val tapped = when (val favoriteTap = FavoriteTap.of(clicked)) {
-            null -> TileButton.of(clicked)?.let { withTimeoutOrNull(TapTimeoutMs) { tap(it, songs) } }
-            else -> setFavorite(favoriteTap, songs)
+        val favoriteTap = FavoriteTap.of(clicked)
+        val jumpTap = JumpTap.of(clicked)
+        val tapped = when {
+            favoriteTap != null -> setFavorite(favoriteTap, songs)
+            jumpTap != null -> withTimeoutOrNull(TapTimeoutMs) { jump(jumpTap, songs) }
+            else -> TileButton.of(clicked)?.let { withTimeoutOrNull(TapTimeoutMs) { tap(it, songs) } }
         }
         val (tile, look) = tile(requestParams.deviceConfiguration, songs, tapped ?: app.playing.state())
         app.tileUpdates.shown(requestParams.tileId, look)
@@ -115,7 +117,11 @@ class NowPlayingTileService : TileService() {
 
     /** The tile for [player], the player's state, from [songs], and how it looks. */
     private suspend fun tile(device: DeviceParameters, songs: Songs, player: PlayerState?): Pair<Tile, TileLook> {
-        val theme = themeChoice.load()
+        // Both start reading the disk as they're made, so neither read waits for the other's.
+        val themes = themeChoice
+        val jumpSteps = jumpStepChoice
+        val theme = themes.load()
+        val jumpStep = jumpSteps.load()
         val favorites = app.favorites.load()
         var content = app.tileUpdates.versioned(TileContent.of(player, songs, favorites, tileCoverSizePx(), Instant.now()))
         // The cover's colors, worked out from the picture read at the size the tile and Now playing
@@ -133,14 +139,14 @@ class NowPlayingTileService : TileService() {
             .setResourcesVersion(content.resourcesVersion)
             .setTileTimeline(
                 Timeline.fromLayoutElement(
-                    tileLayout(this, device, shows, ownColors?.scheme ?: theme.colors, launches()),
+                    tileLayout(this, device, shows, ownColors?.scheme ?: theme.colors, launches(), jumpStep),
                 ),
             )
             // While a song plays, made again once it has ended; otherwise nothing changes until Gusle
             // asks for an update.
             .setFreshnessIntervalMillis(if (leftMs != null && leftMs > 0) leftMs + AfterSongEndMs else 0)
             .build()
-        return tile to TileLook.of(content, theme.id)
+        return tile to TileLook.of(content, theme, jumpStep)
     }
 
     /**
@@ -193,24 +199,17 @@ class NowPlayingTileService : TileService() {
     }
 
     /**
-     * Does what [button] says to the playback service's player, starting the service if it isn't
-     * running, and returns the player's state afterwards: what the tile shows next. Null when the
-     * service couldn't be reached.
-     *
-     * A started service comes back to the saved song by itself, so that's awaited first. Starting
-     * a song also waits for the service to be in the foreground: until then, letting go of it would
+     * Does what [button] says to the playback service's player ([withRestoredPlayer]). Starting a
+     * song also waits for the service to be in the foreground: until then, letting go of it would
      * stop it, and the song with it.
      */
     @OptIn(UnstableApi::class) // handlePlayButtonAction, handlePauseButtonAction
-    private suspend fun tap(button: TileButton, songs: Songs): PlayerState? = withController { player ->
-        if (app.playing.load() != null) player.await { mediaItemCount > 0 }
+    private suspend fun tap(button: TileButton, songs: Songs): PlayerState? = withRestoredPlayer { player ->
         when (button) {
             TileButton.Play -> Util.handlePlayButtonAction(player)
             TileButton.Pause -> Util.handlePauseButtonAction(player)
             TileButton.Previous -> player.seekToPrevious()
             TileButton.Next -> player.seekToNext()
-            TileButton.Back -> player.jump(-SkipMs, songs)
-            TileButton.Forward -> player.jump(SkipMs, songs)
             TileButton.ShuffleAll -> (songs as? Songs.Loaded)?.list?.takeIf { it.isNotEmpty() }?.let { list ->
                 player.shuffleAll(list, QueueSource.AllSongs)
             }
@@ -220,6 +219,22 @@ class NowPlayingTileService : TileService() {
         if ((button == TileButton.Play || button == TileButton.ShuffleAll) && player.startsPlaying) {
             awaitForeground(player)
         }
+    }
+
+    /** Jumps as [tap] says, by the step the tile showed ([withRestoredPlayer]). */
+    private suspend fun jump(tap: JumpTap, songs: Songs): PlayerState? = withRestoredPlayer { player ->
+        player.jump(tap.byMs, songs)
+    }
+
+    /**
+     * Runs [block] on the playback service's player, starting the service if it isn't running, and
+     * returns the player's state afterwards: what the tile shows next. Null when the service
+     * couldn't be reached. A started service comes back to the saved song by itself, so that's
+     * awaited first.
+     */
+    private suspend fun withRestoredPlayer(block: suspend (Player) -> Unit): PlayerState? = withController { player ->
+        if (app.playing.load() != null) player.await { mediaItemCount > 0 }
+        block(player)
         player.state()
     }
 

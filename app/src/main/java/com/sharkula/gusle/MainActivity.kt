@@ -19,6 +19,7 @@ import com.sharkula.gusle.ui.ambient.AmbientMode
 import com.sharkula.gusle.ui.ambient.AmbientState
 import com.sharkula.gusle.ui.ambient.LocalAmbient
 import com.sharkula.gusle.ui.components.Announcement
+import com.sharkula.gusle.ui.nowplaying.LocalJumpStep
 import com.sharkula.gusle.ui.songs.SongsGate
 import com.sharkula.gusle.ui.theme.GusleTheme
 import com.sharkula.gusle.ui.theme.LocalAppTheme
@@ -67,13 +68,23 @@ class MainActivity : ComponentActivity() {
         // recreated activity has it at once.
         val themes = themeChoice
         lifecycleScope.launch { themes.load() }
+        // Read alongside: for the seek screen's buttons, and the Settings row that names the step.
+        val jumpSteps = jumpStepChoice
+        lifecycleScope.launch { jumpSteps.load() }
         val library = musicLibrary
         val announcer = announcer
         setContent {
-            // Nothing until it's known (it usually is by the first frame), so no screen, nor the
-            // clock, shows in the default theme first. Around the gates, so their screens follow it.
-            themes.current?.let { theme ->
-                CompositionLocalProvider(LocalAppTheme provides theme, LocalAmbient provides ambient) {
+            // Nothing until both are known (they usually are by the first frame), so no screen, nor
+            // the clock, shows in the default theme first, nor a restored Settings or seek screen the
+            // default step. Around the gates, so their screens follow them.
+            val theme = themes.current
+            val jumpStep = jumpSteps.current
+            if (theme != null && jumpStep != null) {
+                CompositionLocalProvider(
+                    LocalAppTheme provides theme,
+                    LocalJumpStep provides jumpStep,
+                    LocalAmbient provides ambient,
+                ) {
                     GusleTheme {
                         // Over every screen, the clock at the top too.
                         AmbientMode(ambient) {

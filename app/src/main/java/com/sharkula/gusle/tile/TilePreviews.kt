@@ -8,6 +8,7 @@ import androidx.wear.tiles.TileBuilders.Tile
 import androidx.wear.tiles.tooling.preview.Preview
 import androidx.wear.tiles.tooling.preview.TilePreviewData
 import androidx.wear.tooling.preview.devices.WearDevices
+import com.sharkula.gusle.ui.nowplaying.JumpStep
 import com.sharkula.gusle.ui.theme.AppTheme
 import com.sharkula.gusle.ui.theme.seedColorScheme
 import java.time.Instant
@@ -29,13 +30,13 @@ private fun song(isPlaying: Boolean) = TileShows.Song(
     hasCover = false,
 )
 
-private fun preview(context: Context, shows: TileShows, colors: ColorScheme) =
+private fun preview(context: Context, shows: TileShows, colors: ColorScheme, jumpStep: JumpStep = JumpStep.Default) =
     TilePreviewData(onTileResourceRequest = { TileResources.icons().build() }) { request ->
         Tile.Builder()
             .setResourcesVersion(TileResources.icons().build().version)
             .setTileTimeline(
                 Timeline.fromLayoutElement(
-                    tileLayout(context, request.deviceConfiguration, shows, colors, TileLaunches(clickable(), clickable())),
+                    tileLayout(context, request.deviceConfiguration, shows, colors, TileLaunches(clickable(), clickable()), jumpStep),
                 ),
             )
             .build()
@@ -49,6 +50,9 @@ fun pausedTilePreview(context: Context) = preview(context, song(isPlaying = fals
 
 @Preview(device = WearDevices.LARGE_ROUND, name = "A favorite")
 fun favoriteTilePreview(context: Context) = preview(context, song(isPlaying = true).copy(isFavorite = true), yamatoColors)
+
+@Preview(device = WearDevices.LARGE_ROUND, name = "Jumps of 15 s")
+fun fifteenSecondsTilePreview(context: Context) = preview(context, song(isPlaying = true), yamatoColors, JumpStep.Fifteen)
 
 @Preview(device = WearDevices.LARGE_ROUND, name = "No cover: the app theme")
 fun noCoverTilePreview(context: Context) =

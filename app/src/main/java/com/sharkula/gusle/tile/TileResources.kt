@@ -20,6 +20,7 @@ import androidx.wear.protolayout.ResourceBuilders.Resources
 import com.sharkula.gusle.R
 import com.sharkula.gusle.coverColors
 import com.sharkula.gusle.ui.covers.SongCover
+import com.sharkula.gusle.ui.nowplaying.JumpStep
 import java.io.ByteArrayOutputStream
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -39,24 +40,41 @@ private const val CoverQuality = 85
  * Part of every resources version, to bump when the icons change: the watch keeps a tile's
  * resources by their version, also across updates of Gusle.
  */
-private const val IconsVersion = "2"
+private const val IconsVersion = "3"
 
 /** Ends the version of a cover asked for again ([TileResources.version]). */
 private const val AgainSuffix = "again"
 
-/** The icons the tile draws, by their IDs in its layout. */
+/**
+ * The icons the tile draws, by their IDs in its layout: all of them in its resources, whichever
+ * step its jump buttons have.
+ */
 enum class TileIcon(@param:DrawableRes val drawable: Int) {
     Play(R.drawable.ic_play_arrow),
     Pause(R.drawable.ic_pause),
     Previous(R.drawable.ic_skip_previous),
-    Back(R.drawable.ic_replay_10),
-    Forward(R.drawable.ic_forward_10),
+    Back5(R.drawable.ic_replay_5),
+    Back10(R.drawable.ic_replay_10),
+    Back15(R.drawable.ic_replay_15),
+    Forward5(R.drawable.ic_forward_5),
+    Forward10(R.drawable.ic_forward_10),
+    Forward15(R.drawable.ic_forward_15),
     Next(R.drawable.ic_skip_next),
     Favorite(R.drawable.ic_favorite),
     NotFavorite(R.drawable.ic_favorite_outline),
     Note(R.drawable.ic_music_note);
 
     val id: String get() = "icon_" + name.lowercase()
+
+    companion object {
+        /** The − button's icon for [step]: the number in it is the step's. */
+        fun back(step: JumpStep): TileIcon = of(step.backIcon)
+
+        /** The + button's icon for [step]. */
+        fun forward(step: JumpStep): TileIcon = of(step.forwardIcon)
+
+        private fun of(@DrawableRes drawable: Int): TileIcon = entries.first { it.drawable == drawable }
+    }
 }
 
 /**

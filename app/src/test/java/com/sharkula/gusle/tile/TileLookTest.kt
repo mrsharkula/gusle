@@ -6,6 +6,8 @@ import com.sharkula.gusle.data.FavoriteSongs
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.playback.PlayerState
+import com.sharkula.gusle.ui.nowplaying.JumpStep
+import com.sharkula.gusle.ui.theme.AppTheme
 import java.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -28,10 +30,11 @@ class TileLookTest {
         at: Instant = this.at,
         songs: Songs = this.songs,
         favorites: FavoriteSongs = FavoriteSongs.None,
-        themeId: String = "walnut",
+        theme: AppTheme = AppTheme.Walnut,
+        jumpStep: JumpStep = JumpStep.Default,
     ): TileLook {
         val player = song?.let { PlayerState(it.id, isPlaying, positionMs, durationMs) }
-        return TileLook.of(TileContent.of(player, songs, favorites, coverSizePx = 314, at), themeId)
+        return TileLook.of(TileContent.of(player, songs, favorites, coverSizePx = 314, at), theme, jumpStep)
     }
 
     /** What a tap on the tile showed, and the player a moment later, where it took a moment to start. */
@@ -87,15 +90,22 @@ class TileLookTest {
 
     @Test
     fun anotherThemeLooksDifferent() {
-        assertFalse(look(yamato).isLike(look(yamato, themeId = "adriatic")))
-        assertFalse(look(null).isLike(look(null, themeId = "adriatic")))
+        assertFalse(look(yamato).isLike(look(yamato, theme = AppTheme.Adriatic)))
+        assertFalse(look(null).isLike(look(null, theme = AppTheme.Adriatic)))
+    }
+
+    /** A song's jump buttons' icons change with the step; nothing to play has no such buttons. */
+    @Test
+    fun anotherJumpStepLooksDifferentOnlyWithASong() {
+        assertFalse(look(yamato).isLike(look(yamato, jumpStep = JumpStep.Fifteen)))
+        assertTrue(look(null).isLike(look(null, jumpStep = JumpStep.Fifteen)))
     }
 
     /** A cover that couldn't be read is left out, and tried again the next time. */
     @Test
     fun aSongWithoutItsCoverLooksDifferent() {
         val content = TileContent.of(PlayerState(yamato.id, true, 83_000, null), songs, FavoriteSongs.None, 314, at)
-        assertFalse(TileLook.of(content.withoutCover(), "walnut").isLike(TileLook.of(content, "walnut")))
+        assertFalse(TileLook.of(content.withoutCover(), AppTheme.Walnut, JumpStep.Ten).isLike(TileLook.of(content, AppTheme.Walnut, JumpStep.Ten)))
     }
 
     @Test
