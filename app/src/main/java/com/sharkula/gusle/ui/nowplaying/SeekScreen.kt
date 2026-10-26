@@ -406,23 +406,24 @@ private fun Seek(
                     overflow = TextOverflow.Ellipsis,
                     style = designText(13, FontWeight.SemiBold, shadowAlpha = 0.75f),
                 )
-                // Its digits' middle level with the buttons', 106 dp down (the design's 76 dp put them
-                // 6.5 dp higher), and the length under it as far below as in the design.
-                BigTime(positionMs, landingMs, durationMs, Modifier.align(Alignment.TopCenter).padding(top = 82.5.dp))
-                OfLength(positionMs, landingMs, durationMs, Modifier.align(Alignment.TopCenter).padding(top = 130.5.dp))
-                // Back on the left and on to the right, also in right-to-left languages, like the
-                // controls on Now playing.
+                // Its digits' middle on the screen's middle line, 116.5 dp down, level with the
+                // buttons' (the design's 76 dp put them 17 dp higher), and the length under it as
+                // far below as in the design.
+                BigTime(positionMs, landingMs, durationMs, Modifier.align(Alignment.TopCenter).padding(top = 93.dp))
+                OfLength(positionMs, landingMs, durationMs, Modifier.align(Alignment.TopCenter).padding(top = 141.dp))
+                // Centered on the middle line, 22 dp in from each side. Back on the left and on to
+                // the right, also in right-to-left languages, like the controls on Now playing.
                 SkipButton(
                     step.backIcon,
                     step.backLabel(resources),
                     onBack,
-                    Modifier.align(AbsoluteAlignment.TopLeft).absolutePadding(left = 22.dp, top = 86.dp),
+                    Modifier.align(AbsoluteAlignment.CenterLeft).absolutePadding(left = 22.dp),
                 )
                 SkipButton(
                     step.forwardIcon,
                     step.forwardLabel(resources),
                     onForward,
-                    Modifier.align(AbsoluteAlignment.TopRight).absolutePadding(top = 86.dp, right = 22.dp),
+                    Modifier.align(AbsoluteAlignment.CenterRight).absolutePadding(right = 22.dp),
                 )
                 // Where the volume is on Now playing.
                 CrownHint(hintAlpha, Modifier.align(Alignment.TopCenter).padding(top = 178.dp))
