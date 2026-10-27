@@ -102,9 +102,9 @@ private fun MacrobenchmarkScope.tapFirstSong() {
  * holding its row, and a song played, made a favorite with Now playing's heart, seeking in it, the
  * next songs, the Queue scrolled and a song played from it, back to Home with its playing song, an
  * artist's song played from Artists and an album's from Albums, the favorite played from Favorites
- * and removed there with a swipe, Settings with About, Stop playing, another theme and another jump
- * step. It ends with nothing playing and no favorites, so no music plays on between runs, in walnut
- * and with jumps of 10 s.
+ * and removed there with a swipe, Settings with About, Stop playing, another theme, another jump
+ * step and another crown step. It ends with nothing playing and no favorites, so no music plays on
+ * between runs, in walnut, with jumps of 10 s and crown steps of 4 s.
  */
 fun MacrobenchmarkScope.useEveryScreen() {
     tap("All songs")
@@ -203,9 +203,10 @@ fun MacrobenchmarkScope.useEveryScreen() {
     // Settings is the edge button at the end of Home.
     repeat(2) { drag(down = true) }
     tap("Settings")
-    // Below Stop playing, Theme, Jump by and Rescan music: at the end of the list, which can't bring
-    // it up to the middle of the screen (so not scrollToAndTap). Dragged there once the screen has
-    // slid in, with Jump by its last row in sight: a drag while it slid in once didn't scroll it.
+    // Below Stop playing, Theme, Jump by, Crown step and Rescan music: at the end of the list, which
+    // can't bring it up to the middle of the screen (so not scrollToAndTap). Dragged there once the
+    // screen has slid in, with Jump by its last row in sight: a drag while it slid in once didn't
+    // scroll it.
     waitUntilStill("Jump by")
     repeat(2) { drag(down = true) }
     tap("About")
@@ -220,6 +221,7 @@ fun MacrobenchmarkScope.useEveryScreen() {
     openHome()
     useThemes()
     useJumpSteps()
+    useCrownSteps()
     Thread.sleep(1_000)
 }
 
@@ -321,8 +323,9 @@ private fun MacrobenchmarkScope.useThemes() {
         // The Theme screen stays open, in the new colors.
         Thread.sleep(1_000)
         pressBack()
-        // Settings, naming it.
-        waitFor("Rescan music")
+        // Settings, naming it: Jump by is a row of Settings the chooser doesn't name (Rescan music
+        // is the fourth row now, below the screen).
+        waitFor("Jump by")
         waitFor(theme)
         pressBack()
         // Home, still at its end.
@@ -336,7 +339,8 @@ private fun MacrobenchmarkScope.useThemes() {
  * names, and goes back through them; then 10 seconds again, so the next run starts the same.
  */
 private fun MacrobenchmarkScope.useJumpSteps() {
-    for (step in listOf("15 seconds", "10 seconds")) {
+    // Each step, and one the chooser names that Settings then doesn't.
+    for ((step, other) in listOf("15 seconds" to "10 seconds", "10 seconds" to "15 seconds")) {
         repeat(2) { drag(down = true) }
         tap("Settings")
         tap("Jump by")
@@ -344,9 +348,39 @@ private fun MacrobenchmarkScope.useJumpSteps() {
         // The screen stays open, the step selected.
         Thread.sleep(1_000)
         pressBack()
-        // Settings, naming it: once the chooser, which names every step, has slid out.
-        waitUntilGone("5 seconds")
-        waitFor("Rescan music")
+        // Settings, naming it: once the chooser, which names every step, has slid out, and Crown
+        // step, a row the chooser doesn't name, is there.
+        waitUntilGone(other)
+        waitFor("Crown step")
+        waitFor(step)
+        pressBack()
+        // Home, still at its end.
+        waitFor("Favorites")
+        Thread.sleep(1_000)
+    }
+}
+
+/**
+ * From Home with nothing playing, chooses another step in Settings → Crown step, which the row
+ * then names, and goes back through them; then 4 seconds again, so the next run starts the same.
+ */
+private fun MacrobenchmarkScope.useCrownSteps() {
+    // Each step, and one the chooser names that Settings then doesn't.
+    for ((step, other) in listOf("7 seconds" to "4 seconds", "4 seconds" to "7 seconds")) {
+        repeat(2) { drag(down = true) }
+        tap("Settings")
+        // The third row, under Theme and Jump by: dragged up once the screen has slid in (a drag
+        // while it slides in can be lost).
+        waitUntilStill("Jump by")
+        scrollToAndTap("Crown step", down = true)
+        scrollToAndTap(step, down = true)
+        // The screen stays open, the step selected.
+        Thread.sleep(1_000)
+        pressBack()
+        // Settings, naming it: once the chooser, which names every step, has slid out, and Jump by,
+        // a row the chooser doesn't name, is there.
+        waitUntilGone(other)
+        waitFor("Jump by")
         waitFor(step)
         pressBack()
         // Home, still at its end.
