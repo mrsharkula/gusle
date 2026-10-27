@@ -289,7 +289,9 @@ private fun MacrobenchmarkScope.useSongActions(title: String) {
 
 /**
  * From Now playing, opens the seek screen by the time under the title, turns the crown on through
- * the song and back, which jumps each time it stops, jumps on with the + button, and goes back.
+ * the song and back, which jumps each time it stops, jumps on with the + button, taps the length
+ * at the bottom to the time left, turns a little more with that counting, taps it back, and goes
+ * back.
  */
 private fun MacrobenchmarkScope.seek() {
     // Its label has the time in it, e.g. "4 seconds, seek".
@@ -302,6 +304,15 @@ private fun MacrobenchmarkScope.seek() {
     turnCrown(4)
     turnCrown(-2)
     tap(forward)
+    Thread.sleep(1_000)
+    // Its label has the length in it, e.g. "4 minutes 47 seconds long", or the time left, e.g.
+    // "1 minute 34 seconds left", counting down, if a run that stopped half way left it so: each
+    // tap shows the other, so both get a turn either way.
+    val length = { checkNotNull(find { it.endsWith(" long") || it.endsWith(" left") }) { "No length at the bottom on ${onScreen().map { it.first }}" } }
+    tap(length())
+    Thread.sleep(1_000)
+    turnCrown(2)
+    tap(length())
     Thread.sleep(1_000)
     pressBack()
     waitUntilGone(forward)
@@ -318,6 +329,9 @@ private fun MacrobenchmarkScope.useThemes() {
         repeat(2) { drag(down = true) }
         tap("Settings")
         tap("Theme")
+        // Once the chooser has slid in: a drag while it slides can be lost, and Olive is a row
+        // Settings doesn't show (its Theme row names the chosen one).
+        waitUntilStill("Olive")
         // Plum is further down the list, walnut at its top.
         scrollToAndTap(theme, down = true)
         // The Theme screen stays open, in the new colors.
@@ -344,6 +358,10 @@ private fun MacrobenchmarkScope.useJumpSteps() {
         repeat(2) { drag(down = true) }
         tap("Settings")
         tap("Jump by")
+        // Once the chooser has slid in: 5 seconds is a row Settings doesn't show, as neither step
+        // chosen here is it. (A run failed in its second pass without this, with the chooser's
+        // rows not in the list: the tap on Jump by had been lost to the slide.)
+        waitUntilStill("5 seconds")
         scrollToAndTap(step, down = true)
         // The screen stays open, the step selected.
         Thread.sleep(1_000)
@@ -373,6 +391,8 @@ private fun MacrobenchmarkScope.useCrownSteps() {
         // while it slides in can be lost).
         waitUntilStill("Jump by")
         scrollToAndTap("Crown step", down = true)
+        // Once the chooser has slid in: 1 second is a row Settings doesn't show.
+        waitUntilStill("1 second")
         scrollToAndTap(step, down = true)
         // The screen stays open, the step selected.
         Thread.sleep(1_000)
@@ -521,7 +541,7 @@ private fun MacrobenchmarkScope.scrollTo(title: String, down: Boolean): Rect {
             drag(towardsEnd, fraction = 0.35f)
         }
     }
-    error("\"$title\" isn't in the list")
+    error("\"$title\" isn't in the list, which shows ${onScreen().map { (text, _) -> text }}")
 }
 
 /**

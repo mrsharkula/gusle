@@ -75,6 +75,10 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch { jumpSteps.load() }
         val crownSteps = crownStepChoice
         lifecycleScope.launch { crownSteps.load() }
+        // And whether the seek screen's small time shows the length or what's left, which a tap
+        // there chooses: read now, so it's there by the time the seek screen asks. Not read below
+        // like the others: every tap would compose the root again.
+        lifecycleScope.launch { lengthShownChoice.load() }
         val library = musicLibrary
         val announcer = announcer
         setContent {

@@ -475,8 +475,8 @@ private fun ElapsedTime(
     val inWords = rememberLengthInWords()
     Box(
         modifier
-            .height(ElapsedTapHeight)
-            .widthIn(min = ElapsedTapWidth)
+            .height(TimeTapHeight)
+            .widthIn(min = TimeTapWidth)
             .clip(CircleShape)
             // With the long-press haptic, as a list row's.
             .combinedClickable(
@@ -498,10 +498,6 @@ private fun ElapsedTime(
         )
     }
 }
-
-/** The time under the title takes taps this far around it: the smallest touch target, and wider. */
-private val ElapsedTapHeight = 48.dp
-private val ElapsedTapWidth = 80.dp
 
 /**
  * Says the song that [failure] is about can't be played, by its title, or that nothing can be

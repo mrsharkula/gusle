@@ -13,9 +13,11 @@ import kotlinx.coroutines.async
 /**
  * A choice made in Settings and kept on disk by a stable ID: the app theme
  * ([com.sharkula.gusle.ui.theme.ThemeChoice]), the jump step
- * ([com.sharkula.gusle.ui.nowplaying.JumpStepChoice]) and the crown step
- * ([com.sharkula.gusle.ui.nowplaying.CrownStepChoice]). The app keeps one of each, made as a screen
- * or the tile first needs it, and MainActivity provides the [current] value around every screen.
+ * ([com.sharkula.gusle.ui.nowplaying.JumpStepChoice]), the crown step
+ * ([com.sharkula.gusle.ui.nowplaying.CrownStepChoice]) and, chosen by a tap on the seek screen rather
+ * than in Settings, what its small time shows ([com.sharkula.gusle.ui.nowplaying.LengthShownChoice]).
+ * The app keeps one of each, made as a screen or the tile first needs it, and MainActivity provides
+ * the [current] value around every screen, or waits for it before the first frame.
  * Use it from the main thread: it reads the disk once, off it, as soon as it's made, and writes in
  * the background. These are backed up and moved to a new watch, unlike the queue in
  * [com.sharkula.gusle.playback.LastPlayed]: a choice means the same on any watch.

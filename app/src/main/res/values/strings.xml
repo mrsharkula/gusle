@@ -86,8 +86,21 @@
     <!-- The time under the title on Now playing, a button that opens the seek screen, as screen
          readers say it: e.g. "1 minute 23 seconds, seek". -->
     <string name="elapsed_seek">%1$s, seek</string>
-    <!-- Under the big time on the seek screen: the song's length, e.g. "of 3:45". -->
-    <string name="of_length">of %1$s</string>
+    <!-- The small time at the bottom of the seek screen, when it shows how much of the song is
+         left: e.g. "−1:34" (a minus sign). A tap on it switches it to the song's length ("4:47")
+         and back. -->
+    <string name="time_left">−%1$s</string>
+    <!-- The same two, as screen readers say them: e.g. "4 minutes 47 seconds long", "1 minute 34
+         seconds left". -->
+    <string name="length_long">%1$s long</string>
+    <string name="time_left_words">%1$s left</string>
+    <!-- What a tap on that time does, as screen readers say it. -->
+    <string name="show_time_left">Show time left</string>
+    <string name="show_length">Show length</string>
+    <!-- Which of the two that time shows, as its state for screen readers, so a tap's switch is
+         announced. -->
+    <string name="length_state">Length</string>
+    <string name="time_left_state">Time left</string>
     <!-- The big time on the seek screen, as screen readers say it: e.g. "1 minute 23 seconds of 3
          minutes 45 seconds". -->
     <string name="position_of_length">%1$s of %2$s</string>

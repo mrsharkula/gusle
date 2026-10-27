@@ -21,6 +21,7 @@ import com.sharkula.gusle.ui.covers.SongCoverFetcher
 import com.sharkula.gusle.ui.covers.SongCoverKeyer
 import com.sharkula.gusle.ui.nowplaying.CrownStepChoice
 import com.sharkula.gusle.ui.nowplaying.JumpStepChoice
+import com.sharkula.gusle.ui.nowplaying.LengthShownChoice
 import com.sharkula.gusle.ui.songs.SongDeleter
 import com.sharkula.gusle.ui.theme.ThemeChoice
 import kotlinx.coroutines.MainScope
@@ -56,6 +57,9 @@ class GusleApp : Application(), SingletonImageLoader.Factory {
 
     /** How far a step of the crown moves on the seek screen, chosen in Settings; the tile has no crown. */
     val crownStepChoice by lazy { CrownStepChoice(this) }
+
+    /** Whether the seek screen's small time shows the song's length or what's left, chosen by a tap on it. */
+    val lengthShownChoice by lazy { LengthShownChoice(this) }
 
     /** Asks for a new tile when what it shows changes. */
     val tileUpdates by lazy { TileUpdates(this) }
@@ -161,3 +165,6 @@ val Context.jumpStepChoice: JumpStepChoice get() = (applicationContext as GusleA
 
 /** The app's one [CrownStepChoice], from any of its contexts. */
 val Context.crownStepChoice: CrownStepChoice get() = (applicationContext as GusleApp).crownStepChoice
+
+/** The app's one [LengthShownChoice], from any of its contexts. */
+val Context.lengthShownChoice: LengthShownChoice get() = (applicationContext as GusleApp).lengthShownChoice

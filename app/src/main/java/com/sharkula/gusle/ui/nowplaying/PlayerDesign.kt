@@ -320,6 +320,13 @@ const val DimmedCoverAlpha = 0.45f
 /** The shadow of the icons on see-through buttons. */
 val SeeThroughIconShadow = Shadow(radius = 3.dp, offset = DpOffset(0.dp, 1.dp), alpha = 0.65f)
 
+/**
+ * A small time that's a button, the elapsed time on Now playing and the length on the seek screen,
+ * takes taps this far around its text: the smallest touch target, and wider.
+ */
+val TimeTapHeight = 48.dp
+val TimeTapWidth = 80.dp
+
 /** An icon of [size] in the content color, over a soft [shadow] of its own shape. */
 @Composable
 fun ShadowedIcon(@DrawableRes id: Int, contentDescription: String, shadow: Shadow, size: Dp = 28.dp) {

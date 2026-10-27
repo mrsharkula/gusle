@@ -4,6 +4,8 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.OptIn
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -11,9 +13,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.absolutePadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -30,6 +35,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.geometry.Offset
@@ -40,21 +46,21 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,7 +77,9 @@ import androidx.wear.compose.material3.Text
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.sharkula.gusle.R
 import com.sharkula.gusle.data.Song
+import com.sharkula.gusle.lengthShownChoice
 import com.sharkula.gusle.playback.songId
+import com.sharkula.gusle.ui.LocalHiddenDepth
 import com.sharkula.gusle.ui.components.formatLength
 import com.sharkula.gusle.ui.components.onLongPress
 import com.sharkula.gusle.ui.components.rememberLengthInWords
@@ -96,9 +104,11 @@ import kotlinx.coroutines.withTimeoutOrNull
  * Seeking in the playing song: where it is, big, and along the edge. Turning the crown moves
  * through the song, by the step chosen in Settings ([CrownStep]), and it jumps there half a second
  * after the crown stops; the − and + buttons jump at once, by their own step ([JumpStep]). In the
- * song's colors, over its cover, dimmed. It follows the player like Now playing, also on to the
- * next song, and stays open after a jump, so the song can be nudged again. Holding the title opens
- * the song's actions ([onSongActions]), as on Now playing.
+ * song's colors, over its cover, dimmed. The song's length is the small time at the bottom; a tap
+ * on it shows how much is left instead, and back, which is remembered ([LengthShownChoice]). It
+ * follows the player like Now playing, also on to the next song, and stays open after a jump, so
+ * the song can be nudged again. Holding the title opens the song's actions ([onSongActions]), as
+ * on Now playing.
  */
 @Composable
 fun SeekScreen(connection: PlayerConnection, songsById: Map<Long, Song>, onSongActions: (Song) -> Unit) {
@@ -121,7 +131,12 @@ private fun Seek(
     onSongActions: (Song) -> Unit,
 ) {
     val item = rememberCurrentMediaItemState(player)
-    val shown = rememberScreenShown()
+    val screenShown = rememberScreenShown()
+    // Nor while another screen is over it, e.g. the song's actions: nothing ticks for it there. One
+    // state object throughout, as the hint and the progress keep the one they're given: a screen
+    // restored under others would otherwise keep a "hidden" one for good, and its hint never fade.
+    val hidden by rememberUpdatedState(LocalHiddenDepth.current != 0)
+    val shown = remember(screenShown) { derivedStateOf { screenShown.value && !hidden } }
     val progress = rememberProgress(connection, player, shown)
     val hint = rememberHint(shown, rememberMayAnimateState(shown))
 
@@ -150,6 +165,8 @@ private fun Seek(
     val step = LocalJumpStep.current
     val onBack = remember(seek, canSeek, step) { if (canSeek) ({ seek.skip(-step.ms) }) else null }
     val onForward = remember(seek, canSeek, step) { if (canSeek) ({ seek.skip(step.ms) }) else null }
+    // Read from disk as Gusle starts, so it's there by now, bar a restore in the very first frames.
+    val lengthShown = LocalContext.current.lengthShownChoice
 
     Seek(
         title = if (mediaItem == null) {
@@ -163,6 +180,8 @@ private fun Seek(
         changeMs = remember(seek) { { seek.changeMs } },
         durationMs = durationMs,
         hintAlpha = remember(hint) { { hint.value } },
+        lengthShown = remember(lengthShown) { { lengthShown.current } },
+        onLengthShown = remember(lengthShown) { lengthShown::choose },
         onCrownStep = remember(seek) { seek::step },
         step = step,
         onBack = onBack,
@@ -325,6 +344,13 @@ internal class SeekSteps(private val stepMs: Long) {
     }
 }
 
+/**
+ * How much of a song [durationMs] long is left at [atMs], in whole seconds as the times are shown:
+ * each cut to its second first, so the big time and the time left add up to the length shown
+ * (3:55 and −0:52 of 4:47, not −0:51 from the milliseconds between). Never below zero.
+ */
+internal fun timeLeftMs(durationMs: Long, atMs: Long): Long = ((durationMs / 1000 - atMs / 1000) * 1000).coerceAtLeast(0)
+
 /** How many steps' worth a step of the crown [sinceLastMs] after the one before moves. */
 internal fun stepsWorth(sinceLastMs: Long): Int = when {
     sinceLastMs < QuickerStepMs -> 4
@@ -362,7 +388,8 @@ private val SeekCrownStep = 24.dp
 /**
  * The seek screen as drawn in the design, without a player behind it. [positionMs], [landingMs] and
  * [durationMs] are read only by the times and while drawing the ring, so a tick or a step of the
- * crown composes the times again and redraws the ring, and nothing else.
+ * crown composes the times again and redraws the ring, and nothing else; the length at the bottom
+ * composes again only when it changes, unless it's showing what's left.
  */
 @Composable
 private fun Seek(
@@ -379,6 +406,10 @@ private fun Seek(
     durationMs: () -> Long,
     /** How much the hint shows, from 0 to 1; read only by the hint. */
     hintAlpha: () -> Float,
+    /** What the small time at the bottom shows, the length or what's left; read only by it. Null until it's read from disk, when there's nothing there yet. */
+    lengthShown: () -> LengthShown?,
+    /** A tap on the small time: show that one instead. */
+    onLengthShown: (LengthShown) -> Unit,
     /** A step of the crown, [forward] or back, at [timeMs]; whether it moved anything. */
     onCrownStep: (forward: Boolean, timeMs: Long) -> Boolean,
     /** How far the buttons jump, which their icons and labels say. */
@@ -428,10 +459,10 @@ private fun Seek(
                     style = designText(13, FontWeight.SemiBold, shadowAlpha = 0.75f),
                 )
                 // Its digits' middle on the screen's middle line, 116.5 dp down, level with the
-                // buttons' (the design's 76 dp put them 17 dp higher), and the length under it as
-                // far below as in the design.
+                // buttons' (the design's 76 dp put them 17 dp higher), and while the crown turns,
+                // how far, 48 dp under its top: where the length was until 2026-10-27.
                 BigTime(positionMs, landingMs, durationMs, Modifier.align(Alignment.TopCenter).padding(top = 93.dp))
-                OfLength(changeMs, durationMs, Modifier.align(Alignment.TopCenter).padding(top = 141.dp))
+                Change(changeMs, Modifier.align(Alignment.TopCenter).padding(top = 141.dp))
                 // Centered on the middle line, 22 dp in from each side. Back on the left and on to
                 // the right, also in right-to-left languages, like the controls on Now playing.
                 SkipButton(
@@ -446,8 +477,18 @@ private fun Seek(
                     onForward,
                     Modifier.align(AbsoluteAlignment.CenterRight).absolutePadding(right = 22.dp),
                 )
-                // Where the volume is on Now playing.
-                CrownHint(hintAlpha, Modifier.align(Alignment.TopCenter).padding(top = 178.dp))
+                // The song's length, or what's left of it, where the volume is on Now playing: its
+                // text in the middle of its tap target, on the line the hint had.
+                SongLength(
+                    lengthShown,
+                    onLengthShown,
+                    positionMs,
+                    landingMs,
+                    durationMs,
+                    Modifier.align(Alignment.TopCenter).padding(top = LengthLineMiddle - TimeTapHeight / 2),
+                )
+                // Under it, in the ring's bottom pocket, for its few seconds.
+                CrownHint(hintAlpha, Modifier.align(Alignment.TopCenter).padding(top = 197.dp))
             }
         }
     }
@@ -483,37 +524,83 @@ private fun BigTime(positionMs: () -> Long, landingMs: () -> Long?, durationMs: 
 }
 
 /**
- * Under the big time: the song's length, "of 3:45", and while the crown takes the song elsewhere,
- * first how far ([changeMs]), in the primary color: "+0:42 · of 3:45". Composed again as that
- * changes, not every tick. Screen readers get the length with the big time.
+ * Under the big time, while the crown takes the song elsewhere: how far ([changeMs]), in the
+ * primary color, "+0:42"; nothing otherwise. Composed again as that changes, not every tick. Only
+ * for the eyes: screen readers get the landing point with the big time.
  */
 @Composable
-private fun OfLength(changeMs: () -> Long?, durationMs: () -> Long, modifier: Modifier) {
-    val duration = durationMs()
-    if (duration <= 0) return
-    val of = stringResource(R.string.of_length, formatLength(duration))
-    val change = changeMs()?.takeIf { it != 0L }
-    val changeColor = MaterialTheme.colorScheme.primary
+private fun Change(changeMs: () -> Long?, modifier: Modifier) {
+    val change = changeMs()?.takeIf { it != 0L } ?: return
     Text(
-        if (change == null) {
-            AnnotatedString(of)
-        } else {
-            buildAnnotatedString {
-                withStyle(SpanStyle(color = changeColor, fontWeight = FontWeight.SemiBold)) {
-                    append(if (change < 0) '−' else '+')
-                    append(formatLength(abs(change)))
-                }
-                append(" · ")
-                append(of)
-            }
+        buildString {
+            append(if (change < 0) '−' else '+')
+            append(formatLength(abs(change)))
         },
         modifier = modifier.clearAndSetSemantics {},
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = MaterialTheme.colorScheme.primary,
         textAlign = TextAlign.Center,
         maxLines = 1,
-        style = designText(13, FontWeight.Normal, shadowAlpha = 0.85f).copy(fontFeatureSettings = "tnum"),
+        style = designText(13, FontWeight.SemiBold, shadowAlpha = 0.85f).copy(fontFeatureSettings = "tnum"),
     )
 }
+
+/**
+ * At the bottom: the song's length, "4:47", or how much of it is left, "−1:34", as [lengthShown]
+ * says; a button, and a tap shows the other ([onLengthShown]). The length composes again only when
+ * it changes; what's left counts down with the music, or with the crown while it turns
+ * ([landingMs]), as the big time does, so that composes every second. Nothing while the length
+ * isn't known, nor until what to show is read from disk. The text is small, so the button
+ * reaches well around it, as the time's on Now playing does. Screen readers hear it in words,
+ * which of the two it is, and what a tap does; a tap's switch is announced as its state changing.
+ */
+@Composable
+private fun SongLength(
+    lengthShown: () -> LengthShown?,
+    onLengthShown: (LengthShown) -> Unit,
+    positionMs: () -> Long,
+    landingMs: () -> Long?,
+    durationMs: () -> Long,
+    modifier: Modifier,
+) {
+    val duration = durationMs()
+    if (duration <= 0) return
+    val shown = lengthShown() ?: return
+    val resources = LocalResources.current
+    val inWords = rememberLengthInWords()
+    val ms = when (shown) {
+        LengthShown.Length -> duration
+        LengthShown.TimeLeft -> timeLeftMs(duration, landingMs() ?: positionMs())
+    }
+    val tapLabel = stringResource(if (shown == LengthShown.Length) R.string.show_time_left else R.string.show_length)
+    Box(
+        modifier
+            .height(TimeTapHeight)
+            .widthIn(min = TimeTapWidth)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClickLabel = tapLabel) { onLengthShown(shown.other) }
+            // Said in words, as "4:47" could be read as a time of day; worked out only when asked.
+            .clearAndSetSemantics {
+                contentDescription = resources.getString(
+                    if (shown == LengthShown.Length) R.string.length_long else R.string.time_left_words,
+                    inWords(ms),
+                )
+                // Which it is, as its state, so a tap's switch is announced: a new description alone isn't.
+                stateDescription = resources.getString(if (shown == LengthShown.Length) R.string.length_state else R.string.time_left_state)
+            }
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            if (shown == LengthShown.Length) formatLength(ms) else stringResource(R.string.time_left, formatLength(ms)),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            style = designText(13, FontWeight.Normal, shadowAlpha = 0.85f).copy(fontFeatureSettings = "tnum"),
+        )
+    }
+}
+
+/** The middle of the length's line in the design: 13 sp in a line half as tall again, 178 dp down. */
+private val LengthLineMiddle = 187.75.dp
 
 /** A see-through round button with an [icon] that says what it does ([label]); disabled while [onClick] is null. */
 @Composable
@@ -540,6 +627,8 @@ private fun CrownHint(alpha: () -> Float, modifier: Modifier) {
     Row(
         modifier
             .graphicsLayer { this.alpha = alpha() }
+            // Takes the taps on it, so one doesn't reach the length's button under it and switch that.
+            .pointerInput(Unit) { detectTapGestures { } }
             .clearAndSetSemantics {},
         horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -674,8 +763,20 @@ private fun SeekFifteenSecondsPreview() {
     SeekPreview(landingMs = null, hintAlpha = 0f, step = JumpStep.Fifteen)
 }
 
+@Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true)
 @Composable
-private fun SeekPreview(landingMs: Long?, hintAlpha: Float, step: JumpStep = JumpStep.Default) {
+private fun SeekTimeLeftPreview() {
+    // The length tapped: 2:22 left of 3:45.
+    SeekPreview(landingMs = null, hintAlpha = 0f, lengthShown = LengthShown.TimeLeft)
+}
+
+@Composable
+private fun SeekPreview(
+    landingMs: Long?,
+    hintAlpha: Float,
+    step: JumpStep = JumpStep.Default,
+    lengthShown: LengthShown = LengthShown.Length,
+) {
     GusleTheme {
         AppScaffold {
             ScreenScaffold {
@@ -687,6 +788,8 @@ private fun SeekPreview(landingMs: Long?, hintAlpha: Float, step: JumpStep = Jum
                     changeMs = { landingMs?.let { it - 83_000 } },
                     durationMs = { 225_000 },
                     hintAlpha = { hintAlpha },
+                    lengthShown = { lengthShown },
+                    onLengthShown = {},
                     onCrownStep = { _, _ -> true },
                     step = step,
                     onBack = {},
