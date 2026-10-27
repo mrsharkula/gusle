@@ -9,7 +9,7 @@ import com.sharkula.gusle.R
  * How far the − and + buttons jump, on the seek screen and on the tile: chosen in Settings → Jump
  * by, and kept by [JumpStepChoice]. Each step has its own icons, with its number in them, and the
  * buttons' labels for screen readers say it ([backLabel], [forwardLabel]). The crown's step on the
- * seek screen is its own (5 s), whatever is chosen here.
+ * seek screen is its own choice ([CrownStep]), whatever is chosen here.
  */
 enum class JumpStep(
     /** What the choice is saved as, so renaming or moving an entry doesn't change what was chosen. */

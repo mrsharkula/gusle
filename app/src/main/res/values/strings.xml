@@ -105,7 +105,7 @@
     <string name="rescan_music">Rescan music</string>
     <string name="rescanning">Scanning…</string>
     <string name="theme">Theme</string>
-    <!-- Under the default theme, and the default jump step. -->
+    <!-- Under the default theme, jump step and crown step. -->
     <string name="default_choice">Default</string>
     <!-- Under the list of themes: while such a song plays, the screens are in its colors, so a
          theme chosen then doesn't show yet. -->
@@ -121,6 +121,10 @@
     <string name="jump_by">Jump by</string>
     <!-- Under the list of steps. -->
     <string name="jump_by_note">For the − and + buttons on the seek screen and the tile.</string>
+    <!-- Settings → Crown step: how far a step of the crown moves the song on the seek screen. -->
+    <string name="crown_step">Crown step</string>
+    <!-- Under the list of steps. -->
+    <string name="crown_step_note">For turning the crown on the seek screen. Quick turns move two and four times as far.</string>
     <string name="about">About</string>
     <string name="version">Version %1$s</string>
     <string name="about_text">Plays the music stored on your watch.</string>

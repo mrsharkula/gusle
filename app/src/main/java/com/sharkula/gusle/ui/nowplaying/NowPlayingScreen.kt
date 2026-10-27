@@ -300,7 +300,7 @@ private fun NowPlaying(
     onSongActions: (() -> Unit)?,
 ) {
     val haptics = LocalHapticFeedback.current
-    val crownStepPx = with(LocalDensity.current) { CrownStep.toPx() }
+    val crownStepPx = with(LocalDensity.current) { VolumeCrownStep.toPx() }
     val crown = remember(crownStepPx) { CrownSteps(crownStepPx) }
     GusleTheme(colorScheme = art?.colors) {
         DesignScale {
@@ -594,7 +594,7 @@ private fun Modifier.slowMarquee() = basicMarquee(
  * Turning the crown as far as would scroll a list by this much changes the volume a notch: on the
  * watch, about four notches per quarter turn.
  */
-private val CrownStep = 24.dp
+private val VolumeCrownStep = 24.dp
 
 /** While playing, the played part waves this far in and out, 50 times around a full circle. */
 private val WaveHeight = 1.8.dp

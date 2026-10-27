@@ -19,6 +19,7 @@ import com.sharkula.gusle.ui.components.Announcer
 import com.sharkula.gusle.ui.covers.CoverColors
 import com.sharkula.gusle.ui.covers.SongCoverFetcher
 import com.sharkula.gusle.ui.covers.SongCoverKeyer
+import com.sharkula.gusle.ui.nowplaying.CrownStepChoice
 import com.sharkula.gusle.ui.nowplaying.JumpStepChoice
 import com.sharkula.gusle.ui.songs.SongDeleter
 import com.sharkula.gusle.ui.theme.ThemeChoice
@@ -52,6 +53,9 @@ class GusleApp : Application(), SingletonImageLoader.Factory {
 
     /** The step the − and + buttons jump by, chosen in Settings; made and read as the theme is. */
     val jumpStepChoice by lazy { JumpStepChoice(this, onChoose = tileUpdates::changed) }
+
+    /** How far a step of the crown moves on the seek screen, chosen in Settings; the tile has no crown. */
+    val crownStepChoice by lazy { CrownStepChoice(this) }
 
     /** Asks for a new tile when what it shows changes. */
     val tileUpdates by lazy { TileUpdates(this) }
@@ -154,3 +158,6 @@ val Context.themeChoice: ThemeChoice get() = (applicationContext as GusleApp).th
 
 /** The app's one [JumpStepChoice], from any of its contexts. */
 val Context.jumpStepChoice: JumpStepChoice get() = (applicationContext as GusleApp).jumpStepChoice
+
+/** The app's one [CrownStepChoice], from any of its contexts. */
+val Context.crownStepChoice: CrownStepChoice get() = (applicationContext as GusleApp).crownStepChoice

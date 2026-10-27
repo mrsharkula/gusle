@@ -4,7 +4,6 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.OptIn
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -13,6 +12,7 @@ import androidx.compose.foundation.layout.absolutePadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -32,7 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.focusTarget
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.center
@@ -45,6 +44,7 @@ import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -64,6 +64,7 @@ import androidx.media3.ui.compose.state.rememberCurrentMediaItemState
 import androidx.wear.compose.foundation.requestFocusOnHierarchyActive
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.FilledIconButton
+import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
@@ -86,17 +87,18 @@ import kotlin.math.sin
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Seeking in the playing song: where it is, big, and along the edge. Turning the crown moves
- * through the song, and it jumps there half a second after the crown stops; the − and + buttons
- * jump at once, by the step chosen in Settings ([JumpStep]). In the song's colors, over its cover,
- * dimmed. It follows the player like Now playing, also on to the next song, and stays open after a
- * jump, so the song can be nudged again. Holding the title opens the song's actions
- * ([onSongActions]), as on Now playing.
+ * through the song, by the step chosen in Settings ([CrownStep]), and it jumps there half a second
+ * after the crown stops; the − and + buttons jump at once, by their own step ([JumpStep]). In the
+ * song's colors, over its cover, dimmed. It follows the player like Now playing, also on to the
+ * next song, and stays open after a jump, so the song can be nudged again. Holding the title opens
+ * the song's actions ([onSongActions]), as on Now playing.
  */
 @Composable
 fun SeekScreen(connection: PlayerConnection, songsById: Map<Long, Song>, onSongActions: (Song) -> Unit) {
@@ -129,13 +131,16 @@ private fun Seek(
     val songDurationMs by rememberUpdatedState(song?.durationMs ?: 0)
     val art = rememberCoverArt(song)
     val positionMs = remember(progress) { { progress.currentPositionMs } }
+    val livePositionMs = remember(player) { { player.currentPosition } }
     val durationMs = remember(progress) { { progress.durationOr(songDurationMs) } }
 
     // Each song afresh. Closing the screen before the song has jumped jumps at once, but not in the
-    // next song: a song change drops a jump still to come.
+    // next song: a song change drops a jump still to come. The crown's step can't change while this
+    // screen is open (Settings is elsewhere), so it needn't survive one.
     val scope = rememberCoroutineScope()
-    val seek = remember(progress, mediaItem?.mediaId) {
-        CrownSeek(mediaItem?.mediaId, connection, scope, positionMs, durationMs)
+    val crownStep = LocalCrownStep.current
+    val seek = remember(progress, mediaItem?.mediaId, crownStep) {
+        CrownSeek(mediaItem?.mediaId, connection, scope, livePositionMs, positionMs, durationMs, crownStep.ms)
     }
     DisposableEffect(seek) {
         onDispose { seek.close() }
@@ -155,6 +160,7 @@ private fun Seek(
         art = art,
         positionMs = positionMs,
         landingMs = remember(seek) { { seek.landingMs } },
+        changeMs = remember(seek) { { seek.changeMs } },
         durationMs = durationMs,
         hintAlpha = remember(hint) { { hint.value } },
         onCrownStep = remember(seek) { seek::step },
@@ -169,29 +175,39 @@ private fun Seek(
 /** The song jumps this long after the crown's last step. */
 private const val JumpDelayMs = 500L
 
-/** After a jump, the landing point stays up until the position is this close to it, or this long. */
-private const val CloseEnoughMs = 1_500L
+/** After a jump, the landing point stays up until the position shown moves, or this long. */
 private const val CatchUpMs = 1_000L
 
 /**
- * Where the crown takes the song with [mediaId]: each step a little on or back ([SeekSteps]) from
- * where it was taking it, or from where the music is ([positionMs]), in a song [durationMs] long.
- * Half a second after the last step, the song jumps there; turned back to where it started, it
- * doesn't. Read [landingMs] only where it's shown, so a step composes or draws just that again.
+ * Where the crown takes the song with [mediaId]: each step [stepMs] on or back ([SeekSteps]), or
+ * more when they come quickly, from where it was taking it, or from where the music really is
+ * ([livePositionMs]), in a song [durationMs] long. Not from the position shown ([shownPositionMs]):
+ * that ticks once a second, so it can lag the music by most of a second, a whole step of 1 s. Half
+ * a second after the last step, the song jumps there; turned back to where it started, it doesn't.
+ * Read [landingMs] and [changeMs] only where they're shown, so a step composes or draws just that
+ * again.
  */
 @Stable
 private class CrownSeek(
     private val mediaId: String?,
     private val connection: PlayerConnection,
     private val scope: CoroutineScope,
-    private val positionMs: () -> Long,
+    /** Where the music is, straight from the player. */
+    private val livePositionMs: () -> Long,
+    /** Where the music is as shown; state, which follows a jump a moment later. */
+    private val shownPositionMs: () -> Long,
     private val durationMs: () -> Long,
+    stepMs: Long,
 ) {
     /** Where the song is about to jump; null while it plays on where it is. */
     var landingMs: Long? by mutableStateOf(null)
         private set
 
-    private val steps = SeekSteps()
+    /** How far the crown has taken the song from where the turn started, until it jumps; null otherwise. */
+    var changeMs: Long? by mutableStateOf(null)
+        private set
+
+    private val steps = SeekSteps(stepMs)
     private var jump: Job? = null
 
     /** Where the turn of the crown started, until the song jumps. */
@@ -204,7 +220,7 @@ private class CrownSeek(
     fun step(forward: Boolean, timeMs: Long): Boolean {
         val duration = durationMs()
         if (duration <= 0) return false
-        val from = landingMs ?: positionMs()
+        val from = landingMs ?: livePositionMs()
         val to = steps.next(from, forward, timeMs, duration)
         val turnFrom = turnFromMs ?: from.also { turnFromMs = it }
         when {
@@ -213,7 +229,7 @@ private class CrownSeek(
             to == turnFrom -> drop()
             // At an end the crown may still be turning: the jump waits until it stops, rather than
             // ending the song while the next one would take the rest of the turn.
-            to != from || landingMs != null -> jumpTo(to, afterMs = JumpDelayMs)
+            to != from || landingMs != null -> jumpTo(to, afterMs = JumpDelayMs, change = to - turnFrom)
         }
         return to != from
     }
@@ -222,7 +238,7 @@ private class CrownSeek(
     fun skip(byMs: Long) {
         val duration = durationMs()
         if (duration <= 0) return
-        jumpTo(((landingMs ?: positionMs()) + byMs).coerceIn(0, duration), afterMs = 0)
+        jumpTo(((landingMs ?: livePositionMs()) + byMs).coerceIn(0, duration), afterMs = 0, change = null)
     }
 
     /**
@@ -241,20 +257,26 @@ private class CrownSeek(
         turnFromMs = null
         unsentMs = null
         landingMs = null
+        changeMs = null
     }
 
-    private fun jumpTo(to: Long, afterMs: Long) {
+    /** [change] is how far the turn has taken the song, to show; none for a jump at once. */
+    private fun jumpTo(to: Long, afterMs: Long, change: Long?) {
         landingMs = to
+        changeMs = change
         unsentMs = to
         jump?.cancel()
         jump = scope.launch {
             delay(afterMs)
             turnFromMs = null
             unsentMs = null
+            changeMs = null
             connection.withPlayer { seekInSong(to) }
-            // The position follows a moment later: until then the landing point stays up, rather
-            // than the old position for a moment.
-            withTimeoutOrNull(CatchUpMs) { snapshotFlow { abs(positionMs() - to) < CloseEnoughMs }.first { it } }
+            // The position shown follows a moment later, at its next tick or on the player's word:
+            // until it moves, the landing point stays up, rather than the old position for a moment.
+            // (Not until it's close to the landing point: the old position is already that close
+            // after a step of a second.)
+            withTimeoutOrNull(CatchUpMs) { snapshotFlow { shownPositionMs() }.drop(1).first() }
             landingMs = null
         }
     }
@@ -269,9 +291,6 @@ private class CrownSeek(
     }
 }
 
-/** A step of the crown moves the song this far. */
-private const val SeekStepMs = 5_000L
-
 /**
  * Steps of the crown closer together than these move it twice and four times as far: turned
  * quickly, a whole song takes a couple of turns rather than fifty steps.
@@ -280,10 +299,10 @@ private const val QuickStepMs = 80L
 private const val QuickerStepMs = 40L
 
 /**
- * Where steps of the crown take a song: [SeekStepMs] on or back each, or more when they come
- * quickly ([stepsWorth]); never before its start or past its end.
+ * Where steps of the crown take a song: [stepMs] on or back each (the [CrownStep] chosen in
+ * Settings), or more when they come quickly ([stepsWorth]); never before its start or past its end.
  */
-internal class SeekSteps {
+internal class SeekSteps(private val stepMs: Long) {
     private var lastStepMs = 0L
     private var lastForward: Boolean? = null
     private var lastWorth = 1
@@ -301,7 +320,7 @@ internal class SeekSteps {
         lastStepMs = timeMs
         lastForward = forward
         lastWorth = steps
-        val by = SeekStepMs * steps
+        val by = stepMs * steps
         return (if (forward) fromMs + by else fromMs - by).coerceIn(0, durationMs.coerceAtLeast(0))
     }
 }
@@ -354,6 +373,8 @@ private fun Seek(
     positionMs: () -> Long,
     /** Where the crown is taking it; null while it plays on where it is. */
     landingMs: () -> Long?,
+    /** How far the crown has taken it from where the turn started; null while it isn't turning. */
+    changeMs: () -> Long?,
     /** How long the song is; 0 while that isn't known. */
     durationMs: () -> Long,
     /** How much the hint shows, from 0 to 1; read only by the hint. */
@@ -392,7 +413,7 @@ private fun Seek(
                     .focusTarget(),
             ) {
                 if (art != null) Cover(art.picture, DimmedCoverAlpha, Modifier.align(Alignment.Center))
-                SeekRing(positionMs, landingMs, durationMs, Modifier.fillMaxSize())
+                SeekRing(positionMs, landingMs, changeMs, durationMs, Modifier.fillMaxSize())
                 Text(
                     title,
                     modifier = Modifier
@@ -410,7 +431,7 @@ private fun Seek(
                 // buttons' (the design's 76 dp put them 17 dp higher), and the length under it as
                 // far below as in the design.
                 BigTime(positionMs, landingMs, durationMs, Modifier.align(Alignment.TopCenter).padding(top = 93.dp))
-                OfLength(positionMs, landingMs, durationMs, Modifier.align(Alignment.TopCenter).padding(top = 141.dp))
+                OfLength(changeMs, durationMs, Modifier.align(Alignment.TopCenter).padding(top = 141.dp))
                 // Centered on the middle line, 22 dp in from each side. Back on the left and on to
                 // the right, also in right-to-left languages, like the controls on Now playing.
                 SkipButton(
@@ -461,21 +482,17 @@ private fun BigTime(positionMs: () -> Long, landingMs: () -> Long?, durationMs: 
     )
 }
 
-/** A change shorter than this isn't shown: the landing point is where the music is. */
-private const val MinChangeMs = 1_000L
-
 /**
  * Under the big time: the song's length, "of 3:45", and while the crown takes the song elsewhere,
- * first how far, in the primary color: "+0:42 · of 3:45". Screen readers get the length with the
- * big time.
+ * first how far ([changeMs]), in the primary color: "+0:42 · of 3:45". Composed again as that
+ * changes, not every tick. Screen readers get the length with the big time.
  */
 @Composable
-private fun OfLength(positionMs: () -> Long, landingMs: () -> Long?, durationMs: () -> Long, modifier: Modifier) {
+private fun OfLength(changeMs: () -> Long?, durationMs: () -> Long, modifier: Modifier) {
     val duration = durationMs()
     if (duration <= 0) return
     val of = stringResource(R.string.of_length, formatLength(duration))
-    // The position only while turning, so a tick doesn't compose this again otherwise.
-    val change = landingMs()?.let { it - positionMs() }?.takeIf { abs(it) >= MinChangeMs }
+    val change = changeMs()?.takeIf { it != 0L }
     val changeColor = MaterialTheme.colorScheme.primary
     Text(
         if (change == null) {
@@ -537,21 +554,13 @@ private fun CrownHint(alpha: () -> Float, modifier: Modifier) {
     }
 }
 
-/** A watch crown seen from the side: a rounded outline with two ridges across it. */
+/** A watch crown seen from the side, 7 × 12 dp: the Settings row's icon ([R.drawable.ic_crown]). */
 @Composable
 private fun CrownGlyph(color: Color) {
-    Canvas(Modifier.size(7.dp, 12.dp)) {
-        val line = 1.5.dp.toPx()
-        drawRoundRect(
-            color,
-            topLeft = Offset(line / 2, line / 2),
-            size = Size(size.width - line, size.height - line),
-            cornerRadius = CornerRadius(2.dp.toPx()),
-            style = Stroke(line),
-        )
-        for (y in listOf(5.25.dp, 8.25.dp)) {
-            drawLine(color, Offset(2.5.dp.toPx(), y.toPx()), Offset(size.width - 2.5.dp.toPx(), y.toPx()), line)
-        }
+    // The crown is 16 of the icon's 24 units tall: at 18 dp it's 12 dp, spilling over this box
+    // evenly all round, so the row lays out just the crown.
+    Box(Modifier.size(7.dp, 12.dp), contentAlignment = Alignment.Center) {
+        Icon(painterResource(R.drawable.ic_crown), contentDescription = null, Modifier.requiredSize(18.dp), tint = color)
     }
 }
 
@@ -572,11 +581,18 @@ private val MarkEdge = Color.Black.copy(alpha = 0.5f)
 /**
  * The song along the edge, like Now playing's ring, but always flat: played up to where the music
  * is ([positionMs]), with a knob there. While the crown takes it elsewhere ([landingMs]), the knob
- * is there, the way to it is fainter, and a thin white mark stays where the music is. Everything is
- * read only while drawing, so a tick or a step of the crown draws just the ring again.
+ * is there, the way to it is fainter, and until it jumps ([changeMs]) a thin white mark stays where
+ * the music is. Everything is read only while drawing, so a tick or a step of the crown draws just
+ * the ring again.
  */
 @Composable
-private fun SeekRing(positionMs: () -> Long, landingMs: () -> Long?, durationMs: () -> Long, modifier: Modifier) {
+private fun SeekRing(
+    positionMs: () -> Long,
+    landingMs: () -> Long?,
+    changeMs: () -> Long?,
+    durationMs: () -> Long,
+    modifier: Modifier,
+) {
     val color = MaterialTheme.colorScheme.primary
     // A layer of its own, so a tick or a step draws just the ring again.
     Spacer(
@@ -607,7 +623,7 @@ private fun SeekRing(positionMs: () -> Long, landingMs: () -> Long?, durationMs:
                 val far = maxOf(music, knob)
                 if (near > 0f) drawArc(color, RingStart, near, useCenter = false, topLeft, arcSize, style = played)
                 if (far > near) drawArc(ahead, RingStart + near, far - near, useCenter = false, topLeft, arcSize, style = played)
-                if (landing != null && abs(landing - position) >= MinChangeMs) {
+                if (landing != null && changeMs() != null) {
                     val way = direction(music)
                     val inner = center + way * (radius - markReach)
                     val outer = center + way * (radius + markReach)
@@ -668,6 +684,7 @@ private fun SeekPreview(landingMs: Long?, hintAlpha: Float, step: JumpStep = Jum
                     art = rememberStandInArt(),
                     positionMs = { 83_000 },
                     landingMs = { landingMs },
+                    changeMs = { landingMs?.let { it - 83_000 } },
                     durationMs = { 225_000 },
                     hintAlpha = { hintAlpha },
                     onCrownStep = { _, _ -> true },

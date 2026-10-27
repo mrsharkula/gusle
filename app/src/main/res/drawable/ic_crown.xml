@@ -1,0 +1,19 @@
+<!-- Gusle's own: a watch crown seen from the side, a rounded outline with two ridges across it.
+     The crown is 16 of the 24 units tall and 7/12 as wide, the seek screen's "Turn the crown" hint
+     exactly (its CrownGlyph paints this icon at 18 dp, which makes the crown 7 × 12 dp with 1.5 dp
+     lines). Strokes, so a tint colors all of it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#000000"
+        android:strokeWidth="2"
+        android:pathData="M11,5 H13 A2.67,2.67 0 0 1 15.67,7.67 V16.33 A2.67,2.67 0 0 1 13,19 H11 A2.67,2.67 0 0 1 8.33,16.33 V7.67 A2.67,2.67 0 0 1 11,5 Z" />
+    <path
+        android:strokeColor="#000000"
+        android:strokeWidth="2"
+        android:pathData="M10.67,11 H13.33 M10.67,15 H13.33" />
+</vector>

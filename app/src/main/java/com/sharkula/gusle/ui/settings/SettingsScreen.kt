@@ -22,7 +22,9 @@ import com.sharkula.gusle.musicLibrary
 import com.sharkula.gusle.ui.components.IconCircle
 import com.sharkula.gusle.ui.components.ListButton
 import com.sharkula.gusle.ui.components.ListScreen
+import com.sharkula.gusle.ui.nowplaying.CrownStep
 import com.sharkula.gusle.ui.nowplaying.JumpStep
+import com.sharkula.gusle.ui.nowplaying.LocalCrownStep
 import com.sharkula.gusle.ui.nowplaying.LocalJumpStep
 import com.sharkula.gusle.ui.songs.RescanState
 import com.sharkula.gusle.ui.songs.rememberRescanState
@@ -32,8 +34,9 @@ import com.sharkula.gusle.ui.theme.LocalAppTheme
 
 /**
  * Stop playing, while there's a song to stop; Theme, with the chosen one's name; Jump by, with the
- * step the − and + buttons jump by; Rescan music, with how many songs there are; and About, with
- * Gusle's version. Opened from Home.
+ * step the − and + buttons jump by; Crown step, with how far a step of the crown moves on the seek
+ * screen; Rescan music, with how many songs there are; and About, with Gusle's version. Opened
+ * from Home.
  */
 @Composable
 fun SettingsScreen(
@@ -46,6 +49,7 @@ fun SettingsScreen(
     onStopPlaying: () -> Unit,
     onTheme: () -> Unit,
     onJumpStep: () -> Unit,
+    onCrownStep: () -> Unit,
     onAbout: () -> Unit,
 ) {
     val rescan = rememberRescanState(LocalContext.current.musicLibrary)
@@ -61,6 +65,8 @@ fun SettingsScreen(
         onTheme = onTheme,
         jumpStep = LocalJumpStep.current,
         onJumpStep = onJumpStep,
+        crownStep = LocalCrownStep.current,
+        onCrownStep = onCrownStep,
         scanning = rescan.busy,
         iconRotation = { rescan.rotation },
         version = rememberVersionName(),
@@ -82,6 +88,9 @@ private fun SettingsScreen(
     /** The step the − and + buttons jump by, for its row. */
     jumpStep: JumpStep,
     onJumpStep: () -> Unit,
+    /** How far a step of the crown moves on the seek screen, for its row. */
+    crownStep: CrownStep,
+    onCrownStep: () -> Unit,
     /** From the Rescan tap until it's done; see [RescanState]. */
     scanning: Boolean,
     /** The refresh icon's angle in degrees, read only while drawing. */
@@ -148,6 +157,23 @@ private fun SettingsScreen(
                 secondaryLabel = { Text(pluralStringResource(R.plurals.seconds, jumpStep.seconds, jumpStep.seconds)) },
             )
         }
+        item(key = "crown_step") {
+            ListButton(
+                onClick = onCrownStep,
+                transformationSpec = transformationSpec,
+                colors = rowColors,
+                icon = {
+                    // The crown as the seek screen's hint draws it.
+                    IconCircle(
+                        icon = R.drawable.ic_crown,
+                        background = colors.secondaryContainer,
+                        tint = colors.onSecondaryContainer,
+                    )
+                },
+                label = { Text(stringResource(R.string.crown_step)) },
+                secondaryLabel = { Text(pluralStringResource(R.plurals.seconds, crownStep.seconds, crownStep.seconds)) },
+            )
+        }
         item(key = "rescan") {
             ListButton(
                 onClick = onRescan,
@@ -209,6 +235,8 @@ private fun SettingsScreenPreview() {
             onTheme = {},
             jumpStep = JumpStep.Default,
             onJumpStep = {},
+            crownStep = CrownStep.Default,
+            onCrownStep = {},
             scanning = false,
             iconRotation = { 0f },
             version = "1.0",
@@ -232,6 +260,8 @@ private fun SettingsScreenScanningPreview() {
             onTheme = {},
             jumpStep = JumpStep.Default,
             onJumpStep = {},
+            crownStep = CrownStep.Default,
+            onCrownStep = {},
             scanning = true,
             iconRotation = { 0f },
             version = "1.0",
@@ -255,6 +285,8 @@ private fun SettingsScreenPlayingPreview() {
             onTheme = {},
             jumpStep = JumpStep.Default,
             onJumpStep = {},
+            crownStep = CrownStep.Default,
+            onCrownStep = {},
             scanning = false,
             iconRotation = { 0f },
             version = "1.0",

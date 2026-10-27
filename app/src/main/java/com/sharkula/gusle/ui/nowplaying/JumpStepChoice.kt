@@ -4,7 +4,12 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.sharkula.gusle.ui.settings.SavedChoice
 
-private const val JumpStepPrefs = "jump_step"
+/**
+ * The seek screen's steps' file: the jump step under [JumpStepKey], and the crown step under its
+ * own key ([CrownStepChoice]), so the start reads one file for both. Named for the first of them,
+ * which was saved there before there was a second.
+ */
+internal const val StepPrefs = "jump_step"
 private const val JumpStepKey = "step"
 
 /**
@@ -18,6 +23,6 @@ class JumpStepChoice internal constructor(
     /** [onChoose] runs when another step is chosen, e.g. for the tile to follow it. */
     constructor(context: Context, onChoose: () -> Unit) : this(
         onChoose,
-        { context.applicationContext.getSharedPreferences(JumpStepPrefs, Context.MODE_PRIVATE) },
+        { context.applicationContext.getSharedPreferences(StepPrefs, Context.MODE_PRIVATE) },
     )
 }

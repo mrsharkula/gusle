@@ -19,6 +19,7 @@ import com.sharkula.gusle.ui.ambient.AmbientMode
 import com.sharkula.gusle.ui.ambient.AmbientState
 import com.sharkula.gusle.ui.ambient.LocalAmbient
 import com.sharkula.gusle.ui.components.Announcement
+import com.sharkula.gusle.ui.nowplaying.LocalCrownStep
 import com.sharkula.gusle.ui.nowplaying.LocalJumpStep
 import com.sharkula.gusle.ui.songs.SongsGate
 import com.sharkula.gusle.ui.theme.GusleTheme
@@ -68,21 +69,26 @@ class MainActivity : ComponentActivity() {
         // recreated activity has it at once.
         val themes = themeChoice
         lifecycleScope.launch { themes.load() }
-        // Read alongside: for the seek screen's buttons, and the Settings row that names the step.
+        // Read alongside: for the seek screen's buttons and crown, and the Settings rows that name
+        // the steps.
         val jumpSteps = jumpStepChoice
         lifecycleScope.launch { jumpSteps.load() }
+        val crownSteps = crownStepChoice
+        lifecycleScope.launch { crownSteps.load() }
         val library = musicLibrary
         val announcer = announcer
         setContent {
-            // Nothing until both are known (they usually are by the first frame), so no screen, nor
+            // Nothing until all are known (they usually are by the first frame), so no screen, nor
             // the clock, shows in the default theme first, nor a restored Settings or seek screen the
-            // default step. Around the gates, so their screens follow them.
+            // default steps. Around the gates, so their screens follow them.
             val theme = themes.current
             val jumpStep = jumpSteps.current
-            if (theme != null && jumpStep != null) {
+            val crownStep = crownSteps.current
+            if (theme != null && jumpStep != null && crownStep != null) {
                 CompositionLocalProvider(
                     LocalAppTheme provides theme,
                     LocalJumpStep provides jumpStep,
+                    LocalCrownStep provides crownStep,
                     LocalAmbient provides ambient,
                 ) {
                     GusleTheme {
