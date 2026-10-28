@@ -86,7 +86,7 @@ class AppThemeTest {
         val colors = AppTheme.Walnut.colors
         assertEquals(colors.primary.hex(), color("ic_launcher_background"))
         assertEquals(colors.onPrimary.hex(), color("ic_launcher_foreground"))
-        assertEquals(colors.primaryDim.hex(), color("ic_launcher_skin"))
+        assertEquals(colors.primaryDim.hex(), color("ic_launcher_play"))
     }
 
     private fun Color.hex() = "#%06X".format(toArgb() and 0xFFFFFF)
