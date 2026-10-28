@@ -1,8 +1,24 @@
 <resources>
-    <!-- App icon: the gusle in walnut's colors (AppTheme.Walnut's primary, onPrimary and
-         primaryDim; the last is the play triangle's, the skin's before 2026-10-27). It stays in
-         walnut whatever the app theme. -->
-    <color name="ic_launcher_background">#FFB77D</color>
-    <color name="ic_launcher_foreground">#4D2600</color>
-    <color name="ic_launcher_play">#E8A167</color>
+    <!-- App icon: the gusle in each theme's primary (the background), onPrimary (the gusle) and
+         primaryDim (the play triangle), a set per theme, for the launcher aliases and About. The
+         launcher shows walnut's unless the icon follows the theme (Settings → Theme). AppThemeTest
+         pins them to the themes' colors. -->
+    <color name="ic_launcher_walnut_background">#FFB77D</color>
+    <color name="ic_launcher_walnut_foreground">#4D2600</color>
+    <color name="ic_launcher_walnut_play">#E8A167</color>
+    <color name="ic_launcher_olive_background">#D1C973</color>
+    <color name="ic_launcher_olive_foreground">#353100</color>
+    <color name="ic_launcher_olive_play">#BBB35F</color>
+    <color name="ic_launcher_basil_background">#9AD4A1</color>
+    <color name="ic_launcher_basil_foreground">#003917</color>
+    <color name="ic_launcher_basil_play">#85BE8D</color>
+    <color name="ic_launcher_adriatic_background">#8AD0EE</color>
+    <color name="ic_launcher_adriatic_foreground">#003545</color>
+    <color name="ic_launcher_adriatic_play">#73BAD7</color>
+    <color name="ic_launcher_plum_background">#DCB9F8</color>
+    <color name="ic_launcher_plum_foreground">#3F2358</color>
+    <color name="ic_launcher_plum_play">#C6A3E1</color>
+    <color name="ic_launcher_peony_background">#FFB2B7</color>
+    <color name="ic_launcher_peony_foreground">#561D24</color>
+    <color name="ic_launcher_peony_play">#EF999F</color>
 </resources>

@@ -123,6 +123,8 @@
     <!-- Under the list of themes: while such a song plays, the screens are in its colors, so a
          theme chosen then doesn't show yet. -->
     <string name="theme_note">Songs with a cover keep their cover’s colors.</string>
+    <!-- The switch under the themes: on, the launcher icon is in the theme's colors; off, walnut's. -->
+    <string name="icon_follows_theme">Icon follows theme</string>
     <string name="theme_walnut">Walnut</string>
     <string name="theme_olive">Olive</string>
     <string name="theme_basil">Basil</string>

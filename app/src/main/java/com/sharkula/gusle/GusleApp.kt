@@ -23,6 +23,8 @@ import com.sharkula.gusle.ui.nowplaying.CrownStepChoice
 import com.sharkula.gusle.ui.nowplaying.JumpStepChoice
 import com.sharkula.gusle.ui.nowplaying.LengthShownChoice
 import com.sharkula.gusle.ui.songs.SongDeleter
+import com.sharkula.gusle.ui.theme.IconThemeChoice
+import com.sharkula.gusle.ui.theme.LauncherIcon
 import com.sharkula.gusle.ui.theme.ThemeChoice
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.StateFlow
@@ -50,7 +52,16 @@ class GusleApp : Application(), SingletonImageLoader.Factory {
      * The app theme chosen in Settings. Made, and read, as the screen or the tile first needs it: the
      * playback service starts the app alone too, with no screen to color.
      */
-    val themeChoice by lazy { ThemeChoice(this, onChoose = tileUpdates::changed) }
+    val themeChoice: ThemeChoice by lazy {
+        ThemeChoice(this, onChoose = { tileUpdates.changed(); launcherIcon.sync() })
+    }
+
+    /** Whether the launcher icon follows the theme, chosen in Settings → Theme; made and read as the theme is. */
+    val iconThemeChoice: IconThemeChoice by lazy { IconThemeChoice(this, onChoose = { launcherIcon.sync() }) }
+
+    /** The launcher icon, kept in step with the two choices above. */
+    // Typed, as are the two above: the three refer to one another.
+    val launcherIcon: LauncherIcon by lazy { LauncherIcon(this, { themeChoice }, { iconThemeChoice }) }
 
     /** The step the − and + buttons jump by, chosen in Settings; made and read as the theme is. */
     val jumpStepChoice by lazy { JumpStepChoice(this, onChoose = tileUpdates::changed) }
@@ -168,3 +179,9 @@ val Context.crownStepChoice: CrownStepChoice get() = (applicationContext as Gusl
 
 /** The app's one [LengthShownChoice], from any of its contexts. */
 val Context.lengthShownChoice: LengthShownChoice get() = (applicationContext as GusleApp).lengthShownChoice
+
+/** The app's one [IconThemeChoice], from any of its contexts. */
+val Context.iconThemeChoice: IconThemeChoice get() = (applicationContext as GusleApp).iconThemeChoice
+
+/** The app's [LauncherIcon], from any of its contexts. */
+val Context.launcherIcon: LauncherIcon get() = (applicationContext as GusleApp).launcherIcon

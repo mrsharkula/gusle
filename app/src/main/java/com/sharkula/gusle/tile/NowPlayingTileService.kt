@@ -151,12 +151,12 @@ class NowPlayingTileService : TileService() {
 
     /**
      * What tapping the song, and the title or the message, do: open Gusle on Now playing, as the
-     * watch's media controls do, or as its launcher icon does. Both launch MainActivity; Now playing
-     * is asked for with an extra that holds Gusle's key, so no other app can ask for it. Neither the
-     * alias that other apps can't reach nor Gusle's own PendingIntent works from a tile: the host
-     * can't launch the alias, as it isn't exported (tried 2026-10-16, emulator, renderer 1.500), and
-     * the watch's host never got the PendingIntent ("PendingIntent is canceled or invalid", OnePlus
-     * Watch 4, renderer 1.600).
+     * watch's media controls do, or as its launcher icon does (through an alias). This launches
+     * MainActivity itself; Now playing is asked for with an extra that holds Gusle's key, so no
+     * other app can ask for it. Neither the alias that other apps can't reach nor Gusle's own
+     * PendingIntent works from a tile: the host can't launch the alias, as it isn't exported (tried
+     * 2026-10-16, emulator, renderer 1.500), and the watch's host never got the PendingIntent
+     * ("PendingIntent is canceled or invalid", OnePlus Watch 4, renderer 1.600).
      */
     private suspend fun launches(): TileLaunches {
         val key = app.nowPlayingKey

@@ -33,6 +33,7 @@ import com.sharkula.gusle.data.FavoriteSongs
 import com.sharkula.gusle.data.Song
 import com.sharkula.gusle.data.Songs
 import com.sharkula.gusle.crownStepChoice
+import com.sharkula.gusle.iconThemeChoice
 import com.sharkula.gusle.jumpStepChoice
 import com.sharkula.gusle.playback.PlayerPlace
 import com.sharkula.gusle.playback.QueueSource
@@ -723,8 +724,14 @@ fun GusleNavHost(songs: Songs.Loaded, openNowPlaying: NowPlayingRequest, onWentB
             }
             entry<Screen.Theme>(metadata = slidesIn(Screen.Theme)) {
                 val themes = LocalContext.current.themeChoice
+                val iconThemes = LocalContext.current.iconThemeChoice
                 PlayingSongTheme(songs) { _, _ ->
-                    ThemeScreen(current = LocalAppTheme.current, onChoose = themes::choose)
+                    ThemeScreen(
+                        current = LocalAppTheme.current,
+                        onChoose = themes::choose,
+                        iconFollows = iconThemes.current == true,
+                        onIconFollows = iconThemes::choose,
+                    )
                 }
             }
             entry<Screen.JumpStep>(metadata = slidesIn(Screen.JumpStep)) {

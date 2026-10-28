@@ -13,7 +13,7 @@
     <application
         android:name=".GusleApp"
         android:dataExtractionRules="@xml/data_extraction_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/ic_launcher_walnut"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Gusle">
@@ -32,17 +32,90 @@
         <!-- Single-top: Gusle is one activity with its own navigation, so launching it again while
              it's open (the launcher, the media controls, waking to Gusle after the watch's own
              always-on face covered it, e.g. a palm over a OnePlus watch) reaches the one there
-             instead of stacking a second one on top. -->
+             instead of stacking a second one on top. The launcher reaches it through the aliases
+             below; the tile launches it itself, the media controls through .OpenNowPlaying. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:taskAffinity="">
+            android:taskAffinity="" />
+
+        <!-- The launcher icon: one alias per theme, each with the icon in that theme's colors, and
+             exactly one enabled at a time (ui/theme/LauncherIcon.kt switches them): the default's,
+             or the chosen theme's while the icon follows the theme (Settings → Theme). The names
+             must stay forever: an alias that vanished while enabled would take Gusle out of the
+             app list. AppThemeTest checks them against AppTheme. -->
+        <activity-alias
+            android:name=".LauncherWalnut"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_walnut"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherOlive"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_olive"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherBasil"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_basil"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherAdriatic"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_adriatic"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherPlum"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_plum"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherPeony"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_peony"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- Opens MainActivity on Now playing; the media controls' intent goes here. Not exported,
              so other apps can't ask for it. The tile can't launch it either: it asks MainActivity
@@ -70,7 +143,7 @@
         <service
             android:name=".tile.NowPlayingTileService"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher"
+            android:icon="@mipmap/ic_launcher_walnut"
             android:label="@string/app_name"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
             <intent-filter>

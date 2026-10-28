@@ -7,6 +7,7 @@ import java.io.File
 import kotlin.math.max
 import kotlin.math.min
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -76,17 +77,45 @@ class AppThemeTest {
         }
     }
 
-    /** The launcher icon is drawn in walnut's primary, onPrimary and primaryDim. */
+    /** Each theme's launcher icon is drawn in its primary, onPrimary and primaryDim. */
     @Test
-    fun launcherIconIsInWalnutsColors() {
+    fun launcherIconsAreInTheThemesColors() {
         // Unit tests run in the module's folder.
         val xml = File("src/main/res/values/colors.xml").readText()
         fun color(name: String) =
             Regex("""<color name="$name">(#[0-9A-Fa-f]{6})</color>""").find(xml)?.groupValues?.get(1)?.uppercase()
-        val colors = AppTheme.Walnut.colors
-        assertEquals(colors.primary.hex(), color("ic_launcher_background"))
-        assertEquals(colors.onPrimary.hex(), color("ic_launcher_foreground"))
-        assertEquals(colors.primaryDim.hex(), color("ic_launcher_play"))
+        for (theme in AppTheme.entries) {
+            val colors = theme.colors
+            assertEquals("$theme background", colors.primary.hex(), color("ic_launcher_${theme.id}_background"))
+            assertEquals("$theme gusle", colors.onPrimary.hex(), color("ic_launcher_${theme.id}_foreground"))
+            assertEquals("$theme triangle", colors.primaryDim.hex(), color("ic_launcher_${theme.id}_play"))
+        }
+    }
+
+    /** The six launcher icons are one drawing: the foregrounds differ only in whose colors they name. */
+    @Test
+    fun launcherIconsAreOneDrawing() {
+        val walnut = File("src/main/res/drawable/ic_launcher_foreground_walnut.xml").readText()
+        for (theme in AppTheme.entries) {
+            val xml = File("src/main/res/drawable/ic_launcher_foreground_${theme.id}.xml").readText()
+            assertEquals(theme.name, walnut.replace("ic_launcher_walnut_", "ic_launcher_${theme.id}_"), xml)
+        }
+    }
+
+    /** The manifest has a launcher alias per theme, with that theme's icon, and only the default's starts enabled. */
+    @Test
+    fun launcherAliases() {
+        val manifest = File("src/main/AndroidManifest.xml").readText()
+        for (theme in AppTheme.entries) {
+            assertTrue(theme.launcherAlias, theme.launcherAlias.startsWith("com.sharkula.gusle."))
+            val name = theme.launcherAlias.removePrefix("com.sharkula.gusle")
+            val alias = Regex("""<activity-alias\s[^>]*android:name="$name"[^>]*>""").find(manifest)?.value
+            assertNotNull("$theme has a launcher alias", alias)
+            assertTrue("$theme's alias shows its icon", alias!!.contains("""android:icon="@mipmap/ic_launcher_${theme.id}""""))
+            assertEquals("$theme's alias starts enabled", theme == AppTheme.Default, alias.contains("""android:enabled="true""""))
+            val element = manifest.substring(manifest.indexOf(alias)).substringBefore("</activity-alias>")
+            assertTrue("$theme's alias is a launcher entry", element.contains("android.intent.category.LAUNCHER"))
+        }
     }
 
     private fun Color.hex() = "#%06X".format(toArgb() and 0xFFFFFF)

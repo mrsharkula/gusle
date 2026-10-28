@@ -1,5 +1,6 @@
 package com.sharkula.gusle
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -68,7 +69,13 @@ class MainActivity : ComponentActivity() {
         // ready: the first scheme made takes a while, as its code loads. Done once per process, so a
         // recreated activity has it at once.
         val themes = themeChoice
-        lifecycleScope.launch { themes.load() }
+        val iconThemes = iconThemeChoice
+        lifecycleScope.launch {
+            themes.load()
+            // And whether the launcher icon follows it, for About and the Theme screen. The icon
+            // itself is put in step with both as Gusle leaves the screen (onStop).
+            iconThemes.load()
+        }
         // Read alongside: for the seek screen's buttons and crown, and the Settings rows that name
         // the steps.
         val jumpSteps = jumpStepChoice
@@ -144,6 +151,31 @@ class MainActivity : ComponentActivity() {
         // A request the navigation didn't take while Gusle was shown, e.g. because music access is
         // off, doesn't hold for the next time.
         openNowPlaying.pending = false
+        // The launcher icon changes only now, off the screen: changing it removes this task
+        // (ui/theme/LauncherIcon.kt), which on the screen would close Gusle to the app list. Nor
+        // when the activity is only being made again (a font size change), nor while a screen Gusle
+        // opened covers it in this task (the keyboard for a playlist's name, Android's screen to
+        // delete a song): they'd close with it, and what was typed would be lost.
+        if (!isChangingConfigurations && !isCovered()) launcherIcon.applyIfPending()
+    }
+
+    /**
+     * Whether another activity is on top of this one in its task, e.g. the keyboard for a name.
+     * Also when that can't be told: then the switch waits for the next time.
+     */
+    private fun isCovered(): Boolean {
+        val top = try {
+            val tasks = getSystemService(ActivityManager::class.java).appTasks
+            tasks.firstOrNull { it.taskInfo?.taskId == taskId }?.taskInfo?.topActivity ?: return false
+        } catch (e: IllegalArgumentException) {
+            // The task went away between the listing and the reading, which is what an icon switch
+            // does to a task; rare here, but a crash in onStop would be worse than waiting.
+            return true
+        }
+        // On record as itself even when started as one of its launcher aliases, but either will do.
+        val itself = top.packageName == packageName &&
+            (top.className == MainActivity::class.java.name || top.className == componentName.className)
+        return !itself
     }
 
     private fun takeRequest(intent: Intent) {

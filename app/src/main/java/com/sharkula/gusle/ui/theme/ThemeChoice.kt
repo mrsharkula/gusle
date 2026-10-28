@@ -4,7 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.sharkula.gusle.ui.settings.SavedChoice
 
-private const val ThemePrefs = "app_theme"
+/** The theme's file; [IconThemeChoice] shares it, so both are backed up together. */
+internal const val ThemePrefs = "app_theme"
 private const val ThemeKey = "theme"
 
 /**

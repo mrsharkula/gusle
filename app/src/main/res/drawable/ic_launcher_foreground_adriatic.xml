@@ -1,0 +1,46 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- The gusle, tilted: its pear-shaped body with the play triangle where the skin soundboard was,
+         the neck, and the carved horse's head. It stays inside the adaptive icon's 66 dp safe circle.
+         One file per theme, the same drawing in that theme's colors (AppThemeTest keeps them so). -->
+    <group
+        android:translateX="51"
+        android:translateY="58"
+        android:rotation="32">
+        <!-- Body and neck -->
+        <path
+            android:fillColor="@color/ic_launcher_adriatic_foreground"
+            android:pathData="M0,28 C8.3,28 15,21.3 15,13 C15,5.6 10.4,0.4 5.4,-4.4 L3.2,-7 L3.2,-18 L-3.2,-18 L-3.2,-7 L-5.4,-4.4 C-10.4,0.4 -15,5.6 -15,13 C-15,21.3 -8.3,28 0,28 Z" />
+        <!-- The play triangle in the skin's place (2026-10-27): Material Symbols Rounded play_arrow,
+             the path of ic_play_arrow.xml (a 960-unit box, y from -960 to 0), scaled to 34 dp and
+             centered on (0, 13.5), where the skin's ellipse was, and turned back 32° so it points
+             right on the screen. The inner group's translation is 480 × the scale. -->
+        <group
+            android:translateY="13.5"
+            android:rotation="-32">
+            <group
+                android:scaleX="0.0354167"
+                android:scaleY="0.0354167"
+                android:translateX="-17"
+                android:translateY="17">
+                <path
+                    android:fillColor="@color/ic_launcher_adriatic_play"
+                    android:pathData="M320,-273v-414q0,-17 12,-28.5t28,-11.5q5,0 10.5,1.5T381,-721l326,207q9,6 13.5,15t4.5,19q0,10 -4.5,19T707,-446L381,-239q-5,3 -10.5,4.5T360,-233q-16,0 -28,-11.5T320,-273Z" />
+            </group>
+        </group>
+        <!-- Horse's head, with its eye in the background color -->
+        <group
+            android:translateX="-3.2"
+            android:translateY="-17.5">
+            <path
+                android:fillColor="@color/ic_launcher_adriatic_foreground"
+                android:pathData="M0,0 C-0.6,-6.5 0.2,-11.6 2.6,-14.6 L3.1,-20 L6.6,-15.4 C10.4,-14.2 14.6,-10.6 17.4,-6.2 C18.7,-4.1 17.7,-1.4 15.2,-1.4 C12.6,-1.4 10.2,-3.2 8.2,-2.4 C7,-1.9 6.4,-1 6.4,0 Z" />
+            <path
+                android:fillColor="@color/ic_launcher_adriatic_background"
+                android:pathData="M7.9,-10.2 A1.5,1.5 0,1 0,10.9 -10.2 A1.5,1.5 0,1 0,7.9 -10.2 Z" />
+        </group>
+    </group>
+</vector>

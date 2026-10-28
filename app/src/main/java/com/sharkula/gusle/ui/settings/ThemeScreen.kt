@@ -19,24 +19,29 @@ import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.RadioButton
 import androidx.wear.compose.material3.SurfaceTransformation
+import androidx.wear.compose.material3.SwitchButton
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.lazy.transformedHeight
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.sharkula.gusle.R
+import com.sharkula.gusle.ui.components.LauncherIconPicture
 import com.sharkula.gusle.ui.components.ListScreen
 import com.sharkula.gusle.ui.components.RowCircleSize
 import com.sharkula.gusle.ui.components.edgeTransformation
 import com.sharkula.gusle.ui.theme.AppTheme
 import com.sharkula.gusle.ui.theme.GusleTheme
+import com.sharkula.gusle.ui.theme.launcherIconTheme
 
 /**
  * Settings → Theme: every [AppTheme], each with a circle in its own main color, the [current] one
  * selected. Tapping one chooses it, and every screen takes its colors at once, this one too, which
- * stays open. While a song with a cover plays, the screens are in the song's colors instead, which
- * the line under the list says.
+ * stays open. Under them, a switch for the launcher icon to follow the theme ([iconFollows]), its row
+ * leading with the icon as it is now: the theme's while on, the default's while off. While a song
+ * with a cover plays, the screens are in the song's colors instead, which the line under the list
+ * says.
  */
 @Composable
-fun ThemeScreen(current: AppTheme, onChoose: (AppTheme) -> Unit) {
+fun ThemeScreen(current: AppTheme, onChoose: (AppTheme) -> Unit, iconFollows: Boolean, onIconFollows: (Boolean) -> Unit) {
     // The circles need every theme's colors. Settings has them made as it opens, so they're
     // usually ready; if not, they're made off the main thread and the circles come in after.
     val colorsMade by produceState(AppTheme.entries.all { it.hasColors }) {
@@ -68,6 +73,18 @@ fun ThemeScreen(current: AppTheme, onChoose: (AppTheme) -> Unit) {
                 },
             )
         }
+        item(key = "icon") {
+            // Read out as "Icon follows theme" and whether it's on. The icon changes once Gusle
+            // leaves the screen (ui/theme/LauncherIcon.kt); the row's picture changes at once.
+            SwitchButton(
+                checked = iconFollows,
+                onCheckedChange = onIconFollows,
+                modifier = Modifier.fillMaxWidth().transformedHeight(this, transformationSpec),
+                transformation = SurfaceTransformation(transformationSpec),
+                icon = { LauncherIconPicture(launcherIconTheme(current, iconFollows), RowCircleSize) },
+                label = { Text(stringResource(R.string.icon_follows_theme)) },
+            )
+        }
         item(key = "note") {
             Text(
                 stringResource(R.string.theme_note),
@@ -85,6 +102,6 @@ fun ThemeScreen(current: AppTheme, onChoose: (AppTheme) -> Unit) {
 @Composable
 private fun ThemeScreenPreview() {
     GusleTheme {
-        ThemeScreen(current = AppTheme.Default, onChoose = {})
+        ThemeScreen(current = AppTheme.Default, onChoose = {}, iconFollows = false, onIconFollows = {})
     }
 }
