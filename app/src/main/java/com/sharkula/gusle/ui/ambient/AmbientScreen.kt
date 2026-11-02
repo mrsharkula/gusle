@@ -160,7 +160,7 @@ internal fun AmbientScreen(state: AmbientState) {
 }
 
 /**
- * The always-on display as designed (designs/_explore/ambient.html, E): the [time] big, and under
+ * The always-on display as designed (designs/mockups/ambient.html, E): the [time] big, and under
  * it the [song]'s title (two lines at most), its artist, a bar of how far it is, and the time left
  * in minutes, or where it's paused; with no song, "Gusle". All of it moved by [shift], and on a
  * [lowBit] screen drawn without antialiasing.

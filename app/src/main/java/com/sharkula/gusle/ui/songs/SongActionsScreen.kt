@@ -41,9 +41,9 @@ import com.sharkula.gusle.ui.nowplaying.rememberStandInArt
 import com.sharkula.gusle.ui.theme.GusleTheme
 import kotlinx.coroutines.flow.first
 
-// The song actions screen, layout B of designs/v2/SONG-ACTIONS.md: the song's cover behind, its title
+// The song actions screen, layout B of designs/notes/SONG-ACTIONS.md: the song's cover behind, its title
 // and artist, and its actions as see-through buttons, which scroll over the cover while it stays
-// ([ActionsScreen]). Delete is designs/v2/DELETE.md's, the playlists' designs/v2/PLAYLISTS.md's.
+// ([ActionsScreen]). Delete is designs/notes/DELETE.md's, the playlists' designs/notes/PLAYLISTS.md's.
 
 /** "Added to …" stays this long (or longer, if accessibility settings ask), then goes by itself. */
 private const val AddedShownMs = 1_200L

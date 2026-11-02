@@ -70,7 +70,7 @@ private const val AfterSongEndMs = 1_500L
  * Gusle's tile, one swipe from the watch face: the song the player has, or had last, with
  * play/pause, previous and next, and jumps back and on by the step chosen in Settings
  * ([com.sharkula.gusle.ui.nowplaying.JumpStep]); tapping the song opens Now playing. With no song
- * saved, it offers Shuffle all. See designs/v2/TILE.md.
+ * saved, it offers Shuffle all. See designs/notes/TILE.md.
  *
  * The system asks for the tile when it's added, when Gusle asks for an update ([TileUpdates]), when
  * the playing song ends ([Tile.Builder.setFreshnessIntervalMillis]), and for a tap on a button. It

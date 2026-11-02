@@ -365,7 +365,7 @@ private fun NowPlaying(
                             .offset(x = (-21).dp),
                     )
                 }
-                // Above the volume arc, in the middle, where the speaker was (designs/v2/FAVORITES.md,
+                // Above the volume arc, in the middle, where the speaker was (designs/notes/FAVORITES.md,
                 // E). The heart is 16 dp, 194 dp down; its touch target reaches over the arc, which
                 // takes no taps.
                 FavoriteHeart(

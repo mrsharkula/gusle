@@ -58,7 +58,7 @@ import com.sharkula.gusle.ui.nowplaying.designText
 import com.sharkula.gusle.ui.nowplaying.seeThroughLabelButtonColors
 import java.text.BreakIterator
 
-// What a song's or a playlist's actions screen has in common: layout B of designs/v2/SONG-ACTIONS.md,
+// What a song's or a playlist's actions screen has in common: layout B of designs/notes/SONG-ACTIONS.md,
 // the cover behind, a title and the line under it, and the actions as see-through buttons, which
 // scroll over the cover while it stays; and Gusle's question before deleting either.
 

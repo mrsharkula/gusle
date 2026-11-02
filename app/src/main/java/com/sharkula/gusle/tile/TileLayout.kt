@@ -188,8 +188,8 @@ private const val JumpPrefix = "jump:"
 
 /**
  * The tile's layout: [shows] in [colors] (a song's cover's, or the app theme's), on a black
- * background, as chosen in designs/v2/TILE.md (3d): the cover dimmed behind, the title and artist,
- * previous, back, the favorite heart, forward and next (designs/v2/FAVORITES.md; back and forward
+ * background, as chosen in designs/notes/TILE.md (3d): the cover dimmed behind, the title and artist,
+ * previous, back, the favorite heart, forward and next (designs/notes/FAVORITES.md; back and forward
  * jump by [jumpStep], chosen in Settings), the time and a bar under them, and play/pause in the
  * edge button. Material 3 tile parts throughout, with Gusle's own colors rather than the watch's.
  */

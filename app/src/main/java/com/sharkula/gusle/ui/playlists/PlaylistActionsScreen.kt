@@ -26,7 +26,7 @@ import com.sharkula.gusle.ui.songs.ActionsScreen
 import com.sharkula.gusle.ui.songs.DeleteQuestion
 import com.sharkula.gusle.ui.theme.GusleTheme
 
-// A playlist's actions, like a song's (designs/v2/PROTOTYPE.md, decision 7; designs/v2/PLAYLISTS.md,
+// A playlist's actions, like a song's (designs/notes/PROTOTYPE.md, decision 7; designs/notes/PLAYLISTS.md,
 // build 3): its first song's cover behind, its name and song count, Rename and Delete.
 
 /** Behind a playlist none of whose songs is on the watch: the glow, at once. */

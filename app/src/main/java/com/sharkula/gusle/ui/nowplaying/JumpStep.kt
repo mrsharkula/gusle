@@ -23,7 +23,7 @@ enum class JumpStep(
     Five("5", 5, R.drawable.ic_replay_5, R.drawable.ic_forward_5),
     Ten("10", 10, R.drawable.ic_replay_10, R.drawable.ic_forward_10),
 
-    /** Material Symbols has no 15 s icons: Gusle's are drawn from its 5 and 10 ones (designs/v2/SEEK-STEP.md). */
+    /** Material Symbols has no 15 s icons: Gusle's are drawn from its 5 and 10 ones (designs/notes/SEEK-STEP.md). */
     Fifteen("15", 15, R.drawable.ic_replay_15, R.drawable.ic_forward_15);
 
     /** How far a jump goes, in ms. */

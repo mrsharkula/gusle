@@ -65,7 +65,7 @@ import kotlinx.coroutines.launch
 
 // Wear's own SwipeToReveal (Material 3) was tried first, and dropped: it tells the watch its rows
 // scroll sideways, and takes swipes to the right too, so on the emulator a back swipe that started
-// on a song's row went back only from its left third (designs/v2/FAVORITES.md). This one takes only
+// on a song's row went back only from its left third (designs/notes/FAVORITES.md). This one takes only
 // what's its own, and looks and works the same: the button as a circle behind the row's end, a long
 // swipe doing it at once, with a tick, and one row open at a time, shut as the list scrolls.
 

@@ -172,7 +172,7 @@ private const val VolumeEnd = 115f
 /**
  * The [volume] along the bottom: a short arc that fills from its left end. The arc reads the volume
  * only while drawing. Accessibility services read it as a percentage and can change it. Its speaker
- * gave its place above the arc to the favorite heart (designs/v2/FAVORITES.md).
+ * gave its place above the arc to the favorite heart (designs/notes/FAVORITES.md).
  */
 @Composable
 fun BoxScope.VolumeArc(volume: Volume) {

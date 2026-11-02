@@ -16,7 +16,7 @@ import kotlinx.coroutines.withContext
  * own (no cover, or one with no real color in it). Each is a seed made into a scheme by the same
  * rules as a cover's colors ([seedColorScheme]), so it sits with them. Those rules keep only a
  * seed's hue, so the seeds' hues are far apart. One is chosen in Settings → Theme and kept by
- * [ThemeChoice]; the seeds, and the colors considered, are in designs/v1/ICON-AND-COLORS.md. Each
+ * [ThemeChoice]; the seeds, and the colors considered, are in designs/notes/ICON-AND-COLORS.md. Each
  * has the launcher icon in its colors too; the launcher shows walnut's unless the icon follows the
  * theme ([IconThemeChoice], [LauncherIcon]).
  */

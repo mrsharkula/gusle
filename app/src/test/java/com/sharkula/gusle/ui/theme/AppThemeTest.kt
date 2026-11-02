@@ -39,7 +39,7 @@ class AppThemeTest {
         assertEquals(AppTheme.Default, AppTheme.fromId("sand"))
     }
 
-    /** Each theme's main color, as in designs/v1/ICON-AND-COLORS.md. */
+    /** Each theme's main color, as in designs/notes/ICON-AND-COLORS.md. */
     @Test
     fun primaries() {
         assertEquals(
