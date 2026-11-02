@@ -1,8 +1,3 @@
-# Design work (mockups, briefs) stays local
-designs/
-/DESIGN.md
-/TODO.md
-
 # Gradle / Android build output
 .gradle/
 build/
